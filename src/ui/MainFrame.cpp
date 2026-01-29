@@ -31,6 +31,9 @@ MainFrame::MainFrame()
     UpdateButtonStates();
     UpdateStatusBar();
     
+    // Set application icon
+    SetIcon(wxIcon(wxT("APP_ICON"), wxBITMAP_TYPE_ICO_RESOURCE));
+    
     Centre();
 }
 

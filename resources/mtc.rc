@@ -1,12 +1,12 @@
-// Windows 资源文件
+// Windows resource file
 #ifdef _WIN32
 
 #include <windows.h>
 
-// 应用程序图标
-// IDI_APP ICON "icons/app.ico"
+// Application icon
+APP_ICON ICON "mtc.ico"
 
-// 版本信息
+// Version information
 VS_VERSION_INFO VERSIONINFO
 FILEVERSION 1,0,0,0
 PRODUCTVERSION 1,0,0,0
@@ -26,7 +26,7 @@ BEGIN
             VALUE "InternalName", "mtc"
             VALUE "LegalCopyright", "Copyright (C) 2026"
             VALUE "OriginalFilename", "mtc.exe"
-            VALUE "ProductName", "MTC - 终端环境管理器"
+            VALUE "ProductName", "MTC - Terminal Environment Manager"
             VALUE "ProductVersion", "1.0.0.0"
         END
     END
@@ -35,8 +35,5 @@ BEGIN
         VALUE "Translation", 0x409, 1200
     END
 END
-
-// 清单文件 - 启用视觉样式
-1 RT_MANIFEST "mtc.manifest"
 
 #endif

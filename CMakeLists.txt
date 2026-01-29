@@ -33,6 +33,11 @@ if(WIN32)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
 
+# MSVC UTF-8 编译选项
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 # 创建可执行文件
 add_executable(mtc ${SOURCES})
 
