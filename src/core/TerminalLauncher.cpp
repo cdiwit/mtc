@@ -40,25 +40,51 @@ std::map<std::string, std::string> TerminalLauncher::BuildEnvironment(
     
     // 获取当前环境变量
 #ifdef _WIN32
+    // Helper to convert Wide String to UTF-8
+    auto WideToUtf8 = [](const std::wstring& wstr) -> std::string {
+        if (wstr.empty()) return std::string();
+        int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+        std::string strTo(size_needed, 0);
+        WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+        return strTo;
+    };
+
     wchar_t* envStrings = GetEnvironmentStringsW();
     if (envStrings) {
         for (wchar_t* p = envStrings; *p; ) {
             std::wstring entry(p);
             size_t pos = entry.find(L'=');
             if (pos != std::wstring::npos && pos > 0) {
-                // 转换 wstring 到 string (简单转换，仅 ASCII)
-                std::string name, value;
-                for (size_t i = 0; i < pos; ++i) {
-                    name += static_cast<char>(entry[i]);
-                }
-                for (size_t i = pos + 1; i < entry.length(); ++i) {
-                    value += static_cast<char>(entry[i]);
-                }
+                std::wstring wname = entry.substr(0, pos);
+                std::wstring wvalue = entry.substr(pos + 1);
+                
+                std::string name = WideToUtf8(wname);
+                std::string value = WideToUtf8(wvalue);
+                
                 env[name] = value;
             }
             p += entry.length() + 1;
         }
         FreeEnvironmentStringsW(envStrings);
+    }
+    
+    // 用自定义变量覆盖 (Windows 大小写不敏感处理)
+    for (const auto& var : customVars) {
+        bool found = false;
+        // 查找是否存在同名变量（忽略大小写）
+        for (auto it = env.begin(); it != env.end(); ++it) {
+            if (_stricmp(it->first.c_str(), var.name.c_str()) == 0) {
+                // 找到同名变量，删除旧的（为了保持用户的大小写偏好），插入新的
+                env.erase(it);
+                env[var.name] = var.value;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            env[var.name] = var.value;
+        }
     }
 #else
     for (char** e = environ; *e; ++e) {
@@ -68,12 +94,12 @@ std::map<std::string, std::string> TerminalLauncher::BuildEnvironment(
             env[entry.substr(0, pos)] = entry.substr(pos + 1);
         }
     }
-#endif
     
-    // 用自定义变量覆盖
+    // 用自定义变量覆盖 (Linux/Mac 大小写敏感)
     for (const auto& var : customVars) {
         env[var.name] = var.value;
     }
+#endif
     
     return env;
 }
@@ -160,72 +186,168 @@ TerminalType TerminalLauncher::AutoDetectTerminal() {
 }
 
 #ifdef _WIN32
+// Helper to convert UTF-8 to Wide String
+std::wstring Utf8ToWide(const std::string& str) {
+    if (str.empty()) return std::wstring();
+    int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstrTo(size_needed, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+    return wstrTo;
+}
+
 // Helper to formatted error message
-std::string GetLastErrorAsString() {
-    DWORD errorMessageID = ::GetLastError();
+std::string GetLastErrorAsString(DWORD errorMessageID) {
     if(errorMessageID == 0) {
-        return std::string();
+        return "Unknown error (0)";
     }
     
-    LPSTR messageBuffer = nullptr;
-    size_t size = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                 NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+    LPWSTR messageBuffer = nullptr;
+    size_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPWSTR)&messageBuffer, 0, NULL);
     
-    std::string message(messageBuffer, size);
-    LocalFree(messageBuffer);
+    std::string message;
+    if (size > 0 && messageBuffer) {
+        std::wstring wmsg(messageBuffer, size);
+        int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wmsg[0], (int)wmsg.size(), NULL, 0, NULL, NULL);
+        message.resize(size_needed);
+        WideCharToMultiByte(CP_UTF8, 0, &wmsg[0], (int)wmsg.size(), &message[0], size_needed, NULL, NULL);
+        
+        LocalFree(messageBuffer);
+    } else {
+        message = "Failed to format error message";
+    }
 
-    return message + " (" + std::to_string(errorMessageID) + ")";
+    return message + " (Code: " + std::to_string(errorMessageID) + ")";
 }
+
+#include <algorithm> // For std::sort
+#include <fstream>
+#include <filesystem>
+#include "../utils/PathUtils.h"
+
+// ... (previous code)
 
 bool TerminalLauncher::LaunchWindows(
     const Profile& profile,
     const std::map<std::string, std::string>& env,
     std::string* errorMsg
 ) {
-    // 构建 Unicode 环境变量块
-    std::wstring envBlock;
-    for (const auto& pair : env) {
-        // 转换 string 到 wstring
-        std::wstring wname(pair.first.begin(), pair.first.end());
-        std::wstring wvalue(pair.second.begin(), pair.second.end());
-        envBlock += wname + L"=" + wvalue + L'\0';
-    }
-    envBlock += L'\0';  // 双 null 结尾
-    
-    // 确定终端命令和参数
     std::wstring command, args;
-    std::wstring workDir(profile.workingDirectory.begin(), profile.workingDirectory.end());
+    std::wstring workDir = Utf8ToWide(profile.workingDirectory);
     
     TerminalType type = profile.terminalType;
     if (type == TerminalType::Auto) {
         type = AutoDetectTerminal();
     }
     
-    switch (type) {
-        case TerminalType::WindowsTerminal:
-            command = L"wt.exe";
-            if (!workDir.empty()) {
-                args = L"-d \"" + workDir + L"\"";
+    // Windows Terminal 特殊处理：使用 PowerShell 脚本初始化环境变量
+    if (type == TerminalType::WindowsTerminal) {
+        try {
+            fs::path tempDir = fs::temp_directory_path();
+            std::string filename = "mtc_init_" + std::to_string(std::time(nullptr)) + ".ps1";
+            fs::path scriptPath = tempDir / filename;
+            
+            std::ofstream script(scriptPath);
+            if (script.is_open()) {
+                // 写入 UTF-8 BOM，防止中文乱码
+                unsigned char bom[] = { 0xEF, 0xBB, 0xBF };
+                script.write(reinterpret_cast<char*>(bom), sizeof(bom));
+                
+                script << "# MTC Initialization Script" << std::endl;
+                
+                // 设置所有环境变量
+                for (const auto& var : profile.environmentVariables) {
+                    // 转义单引号
+                    std::string value = var.value;
+                    size_t pos = 0;
+                    while ((pos = value.find("'", pos)) != std::string::npos) {
+                        value.replace(pos, 1, "''");
+                        pos += 2;
+                    }
+                    
+                    script << "$env:" << var.name << " = '" << value << "'" << std::endl;
+                }
+                
+                // 切换目录
+                if (!profile.workingDirectory.empty()) {
+                    std::string wd = profile.workingDirectory;
+                    // 转义
+                    size_t pos = 0;
+                    while ((pos = wd.find("'", pos)) != std::string::npos) {
+                        wd.replace(pos, 1, "''");
+                        pos += 2;
+                    }
+                    script << "Set-Location '" << wd << "'" << std::endl;
+                }
+                
+                // 清理脚本自身 (可选，但为了调试先保留，或者利用 Start-Job 删除)
+                // script << "Remove-Item $MyInvocation.MyCommand.Path" << std::endl;
+                
+                script.close();
+                
+                // 构建 wt 命令行
+                // wt.exe new-tab --title "Name" powershell -NoExit -ExecutionPolicy Bypass -File "path"
+                command = L"wt.exe";
+                args = L"new-tab --title \"" + Utf8ToWide(profile.name) + L"\" powershell -NoExit -ExecutionPolicy Bypass -File \"" + scriptPath.wstring() + L"\"";
+                
+                // 启动进程 (wt.exe 不需要特殊的 envBlock，因为它可能复用进程)
+                // 我们仍然传递 envBlock，以防它是新进程
             }
-            break;
-        case TerminalType::PowerShell:
-            command = L"powershell.exe";
-            if (!workDir.empty()) {
-                args = L"-NoExit -Command \"Set-Location '" + workDir + L"'\"";
-            } else {
-                args = L"-NoExit";
-            }
-            break;
-        case TerminalType::Cmd:
-        default:
-            command = L"cmd.exe";
-            if (!workDir.empty()) {
-                args = L"/K cd /d \"" + workDir + L"\"";
-            } else {
-                args = L"/K";
-            }
-            break;
+        } catch (...) {
+            // Fallback to default behavior if script creation fails
+        }
     }
+    
+    // 如果没有被特殊处理覆盖，则使用默认逻辑
+    if (command.empty()) {
+        switch (type) {
+            case TerminalType::WindowsTerminal:
+                // Fallback (虽然上面处理了，但防止异常)
+                command = L"wt.exe";
+                if (!workDir.empty()) {
+                    args = L"-d \"" + workDir + L"\"";
+                }
+                break;
+            case TerminalType::PowerShell:
+                command = L"powershell.exe";
+                if (!workDir.empty()) {
+                    args = L"-NoExit -Command \"Set-Location '" + workDir + L"'\"";
+                } else {
+                    args = L"-NoExit";
+                }
+                break;
+            case TerminalType::Cmd:
+            default:
+                command = L"cmd.exe";
+                if (!workDir.empty()) {
+                    args = L"/K cd /d \"" + workDir + L"\"";
+                } else {
+                    args = L"/K";
+                }
+                break;
+        }
+    }
+
+    // 构建 Unicode 环境变量块 (即便是 wt，如果是新进程也需要这个)
+    // Windows 要求环境变量块必须按名称的字母顺序排序（不区分大小写）
+    std::vector<std::pair<std::wstring, std::wstring>> envVars;
+    envVars.reserve(env.size());
+    
+    for (const auto& pair : env) {
+        envVars.emplace_back(Utf8ToWide(pair.first), Utf8ToWide(pair.second));
+    }
+    
+    std::sort(envVars.begin(), envVars.end(), 
+        [](const std::pair<std::wstring, std::wstring>& a, const std::pair<std::wstring, std::wstring>& b) {
+            return _wcsicmp(a.first.c_str(), b.first.c_str()) < 0;
+        }
+    );
+    
+    std::wstring envBlock;
+    for (const auto& pair : envVars) {
+        envBlock += pair.first + L"=" + pair.second + L'\0';
+    }
+    envBlock += L'\0';  // 双 null 结尾
     
     std::wstring cmdLine = command + L" " + args;
     
@@ -248,6 +370,9 @@ bool TerminalLauncher::LaunchWindows(
         &pi
     );
     
+    // 立即保存错误码
+    DWORD lastError = ::GetLastError();
+    
     if (success) {
         CloseHandle(pi.hProcess);
         CloseHandle(pi.hThread);
@@ -255,7 +380,7 @@ bool TerminalLauncher::LaunchWindows(
     }
     
     if (errorMsg) {
-        *errorMsg = GetLastErrorAsString();
+        *errorMsg = GetLastErrorAsString(lastError);
     }
 
     return false;
