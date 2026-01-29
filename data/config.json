@@ -1,0 +1,10 @@
+{
+    "version": "1.0",
+    "profiles": [],
+    "settings": {
+        "defaultTerminalType": "auto",
+        "language": "zh-CN",
+        "theme": "system",
+        "autoBackup": true
+    }
+}

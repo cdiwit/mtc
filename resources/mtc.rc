@@ -1,0 +1,42 @@
+// Windows 资源文件
+#ifdef _WIN32
+
+#include <windows.h>
+
+// 应用程序图标
+// IDI_APP ICON "icons/app.ico"
+
+// 版本信息
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS VOS__WINDOWS32
+FILETYPE VFT_APP
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "MTC"
+            VALUE "FileDescription", "Multi-Terminal Commander"
+            VALUE "FileVersion", "1.0.0.0"
+            VALUE "InternalName", "mtc"
+            VALUE "LegalCopyright", "Copyright (C) 2026"
+            VALUE "OriginalFilename", "mtc.exe"
+            VALUE "ProductName", "MTC - 终端环境管理器"
+            VALUE "ProductVersion", "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+// 清单文件 - 启用视觉样式
+1 RT_MANIFEST "mtc.manifest"
+
+#endif
