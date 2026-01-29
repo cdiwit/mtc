@@ -1,0 +1,50 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    name: Build on Windows
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Restore vcpkg cache
+      id: cache-vcpkg
+      uses: actions/cache@v4
+      with:
+        path: vcpkg
+        key: ${{ runner.os }}-vcpkg-wxwidgets-json
+
+    - name: Setup vcpkg
+      if: steps.cache-vcpkg.outputs.cache-hit != 'true'
+      run: |
+        git clone https://github.com/microsoft/vcpkg.git
+        .\vcpkg\bootstrap-vcpkg.bat
+
+    - name: Install dependencies
+      run: |
+        if (!(Test-Path vcpkg\vcpkg.exe)) {
+            .\vcpkg\bootstrap-vcpkg.bat
+        }
+        .\vcpkg\vcpkg install wxwidgets:x64-windows nlohmann-json:x64-windows
+
+    - name: Configure CMake
+      run: |
+        cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+
+    - name: Build
+      run: |
+        cmake --build build --config Release
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MTC-Windows-Release
+        path: bin/Release/
