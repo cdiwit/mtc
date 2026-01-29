@@ -204,12 +204,18 @@ void MainFrame::OnLaunchTerminal(wxCommandEvent& event) {
         return;
     }
     
-    if (TerminalLauncher::Launch(*profile)) {
+    std::string errorMsg;
+    if (TerminalLauncher::Launch(*profile, &errorMsg)) {
         m_statusBar->SetStatusText(
             wxString::Format(wxT("终端已启动: %s"), 
                              wxString::FromUTF8(profile->name)));
     } else {
-        wxMessageBox(wxT("启动终端失败，请检查配置"), wxT("错误"), 
+        wxString msg = wxT("启动终端失败，请检查配置");
+        if (!errorMsg.empty()) {
+            msg += wxT("\n详细错误: ") + wxString::FromUTF8(errorMsg);
+        }
+        
+        wxMessageBox(msg, wxT("错误"), 
                      wxOK | wxICON_ERROR, this);
     }
 }

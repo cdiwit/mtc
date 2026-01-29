@@ -7,7 +7,7 @@
 class TerminalLauncher {
 public:
     // 启动终端
-    static bool Launch(const Profile& profile);
+    static bool Launch(const Profile& profile, std::string* errorMsg = nullptr);
     
     // 获取当前平台可用的终端类型
     static std::vector<TerminalType> GetAvailableTerminals();
@@ -30,12 +30,15 @@ private:
     // 平台特定实现
 #ifdef _WIN32
     static bool LaunchWindows(const Profile& profile, 
-                              const std::map<std::string, std::string>& env);
+                              const std::map<std::string, std::string>& env,
+                              std::string* errorMsg);
 #elif defined(__linux__)
     static bool LaunchLinux(const Profile& profile,
-                            const std::map<std::string, std::string>& env);
+                            const std::map<std::string, std::string>& env,
+                            std::string* errorMsg);
 #elif defined(__APPLE__)
     static bool LaunchMacOS(const Profile& profile,
-                            const std::map<std::string, std::string>& env);
+                            const std::map<std::string, std::string>& env,
+                            std::string* errorMsg);
 #endif
 };

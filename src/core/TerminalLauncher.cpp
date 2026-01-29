@@ -10,19 +10,25 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <cstring>
+#include <fcntl.h>
+#include <cerrno>
+#include <cstdio>
+#include <memory>
+#include <array>
 extern char** environ;
 #endif
 
-bool TerminalLauncher::Launch(const Profile& profile) {
+bool TerminalLauncher::Launch(const Profile& profile, std::string* errorMsg) {
     auto env = BuildEnvironment(profile.environmentVariables);
     
 #ifdef _WIN32
-    return LaunchWindows(profile, env);
+    return LaunchWindows(profile, env, errorMsg);
 #elif defined(__linux__)
-    return LaunchLinux(profile, env);
+    return LaunchLinux(profile, env, errorMsg);
 #elif defined(__APPLE__)
-    return LaunchMacOS(profile, env);
+    return LaunchMacOS(profile, env, errorMsg);
 #else
+    if (errorMsg) *errorMsg = "Unsupported platform";
     return false;
 #endif
 }
@@ -154,9 +160,27 @@ TerminalType TerminalLauncher::AutoDetectTerminal() {
 }
 
 #ifdef _WIN32
+// Helper to formatted error message
+std::string GetLastErrorAsString() {
+    DWORD errorMessageID = ::GetLastError();
+    if(errorMessageID == 0) {
+        return std::string();
+    }
+    
+    LPSTR messageBuffer = nullptr;
+    size_t size = FormatMessageA(STATUS_PRIVATE | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                 NULL, errorMessageID, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&messageBuffer, 0, NULL);
+    
+    std::string message(messageBuffer, size);
+    LocalFree(messageBuffer);
+
+    return message + " (" + std::to_string(errorMessageID) + ")";
+}
+
 bool TerminalLauncher::LaunchWindows(
     const Profile& profile,
-    const std::map<std::string, std::string>& env
+    const std::map<std::string, std::string>& env,
+    std::string* errorMsg
 ) {
     // 构建 Unicode 环境变量块
     std::wstring envBlock;
@@ -230,6 +254,10 @@ bool TerminalLauncher::LaunchWindows(
         return true;
     }
     
+    if (errorMsg) {
+        *errorMsg = GetLastErrorAsString();
+    }
+
     return false;
 }
 #endif
@@ -237,21 +265,49 @@ bool TerminalLauncher::LaunchWindows(
 #ifdef __linux__
 bool TerminalLauncher::LaunchLinux(
     const Profile& profile,
-    const std::map<std::string, std::string>& env
+    const std::map<std::string, std::string>& env,
+    std::string* errorMsg
 ) {
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        if (errorMsg) *errorMsg = "Failed to create pipe: " + std::string(strerror(errno));
+        return false;
+    }
+
+    // Set O_CLOEXEC so pipe is closed in child on successful exec
+    // This is crucial: if exec succeeds, write end is closed, read returns 0.
+    // If exec fails, child writes errno and exits.
+    if (fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) == -1) {
+        if (errorMsg) *errorMsg = "Failed to set FD_CLOEXEC: " + std::string(strerror(errno));
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return false;
+    }
+
     pid_t pid = fork();
     
+    if (pid == -1) {
+         if (errorMsg) *errorMsg = "Failed to fork: " + std::string(strerror(errno));
+         close(pipefd[0]);
+         close(pipefd[1]);
+         return false;
+    }
+    
     if (pid == 0) {
-        // 子进程
-        // 设置环境变量
+        // Child
+        close(pipefd[0]); // Close read end
+
+        // Set environment
         for (const auto& pair : env) {
             setenv(pair.first.c_str(), pair.second.c_str(), 1);
         }
         
-        // 切换工作目录
+        // Change work dir
         if (!profile.workingDirectory.empty()) {
             if (chdir(profile.workingDirectory.c_str()) != 0) {
-                // 目录切换失败
+                int err = errno;
+                write(pipefd[1], &err, sizeof(err));
+                _exit(1);
             }
         }
         
@@ -273,29 +329,48 @@ bool TerminalLauncher::LaunchLinux(
                 break;
         }
         
+        // If we get here, exec failed
+        int err = errno;
+        write(pipefd[1], &err, sizeof(err));
         _exit(1);
     }
     
-    return pid > 0;
+    // Parent
+    close(pipefd[1]); // Close write end
+    
+    int childErr = 0;
+    ssize_t count = read(pipefd[0], &childErr, sizeof(childErr));
+    close(pipefd[0]);
+    
+    if (count > 0) {
+        // Child wrote error code (exec or chdir failed)
+        if (errorMsg) *errorMsg = strerror(childErr);
+        waitpid(pid, nullptr, 0); // Cleanup zombie
+        return false;
+    }
+    
+    // If count == 0, write end was closed (exec succeeded)
+    return true;
 }
 #endif
 
 #ifdef __APPLE__
 bool TerminalLauncher::LaunchMacOS(
     const Profile& profile,
-    const std::map<std::string, std::string>& env
+    const std::map<std::string, std::string>& env,
+    std::string* errorMsg
 ) {
-    // 构建 AppleScript 命令
+    // Build AppleScript
     std::string script = "tell application \"Terminal\"\n";
     script += "  activate\n";
     script += "  do script \"";
     
-    // 切换目录
+    // Change directory
     if (!profile.workingDirectory.empty()) {
         script += "cd '" + profile.workingDirectory + "'";
     }
     
-    // 设置环境变量
+    // Set environment variables
     for (const auto& var : profile.environmentVariables) {
         script += " && export " + var.name + "='" + var.value + "'";
     }
@@ -303,7 +378,7 @@ bool TerminalLauncher::LaunchMacOS(
     script += "\"\n";
     script += "end tell";
     
-    // 转义单引号
+    // Escape single quotes for shell
     std::string escapedScript;
     for (char c : script) {
         if (c == '\'') {
@@ -313,7 +388,35 @@ bool TerminalLauncher::LaunchMacOS(
         }
     }
     
-    std::string cmd = "osascript -e '" + escapedScript + "'";
-    return system(cmd.c_str()) == 0;
+    // Redirect stderr to stdout to capture error message
+    std::string cmd = "osascript -e '" + escapedScript + "' 2>&1";
+    
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) {
+        if (errorMsg) *errorMsg = "Failed to run osascript: " + std::string(strerror(errno));
+        return false;
+    }
+
+    // Read output (which contains error if failed)
+    std::array<char, 128> buffer;
+    std::string result;
+    while (fgets(buffer.data(), buffer.size(), fp) != nullptr) {
+        result += buffer.data();
+    }
+    
+    int status = pclose(fp);
+    
+    if (status != 0) {
+        if (errorMsg) {
+             // Remove trailing newline
+            if (!result.empty() && result.back() == '\n') {
+                result.pop_back();
+            }
+            *errorMsg = result;
+        }
+        return false;
+    }
+    
+    return true;
 }
 #endif
