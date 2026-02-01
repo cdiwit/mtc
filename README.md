@@ -10,6 +10,10 @@
 - 支持 Windows、Linux、macOS 跨平台运行
 - 配置持久化存储
 
+## 截图
+
+![MTC 运行截图](docs/screenshot.png)
+
 ## 构建
 
 ### 依赖
