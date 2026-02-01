@@ -28,7 +28,8 @@
 |------|--------|-------|
 | Windows | [MTC-Windows-Release](https://github.com/cdiwit/mtc/actions) | - |
 | Linux | [MTC-Linux-Release](https://github.com/cdiwit/mtc/actions) | [MTC-Linux-Release](https://gitee.com/cdiwit/mtc/gitee-go) |
-| macOS | [MTC-macOS-Release](https://github.com/cdiwit/mtc/actions) | - |
+| macOS (Intel) | [MTC-macOS-x64-Release](https://github.com/cdiwit/mtc/actions) | - |
+| macOS (Apple Silicon) | [MTC-macOS-ARM64-Release](https://github.com/cdiwit/mtc/actions) | - |
 
 > **说明**: GitHub 提供全平台构建，Gitee 仅提供 Linux 构建。国内用户如需 Windows/macOS 版本请访问 GitHub。
 
