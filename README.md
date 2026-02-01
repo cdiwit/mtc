@@ -12,7 +12,9 @@
 
 ## 截图
 
-![MTC 运行截图](docs/screenshot.png)
+![MTC 主界面](docs/screenshot.png)
+
+![新建配置对话框](docs/screenshot2.png)
 
 ## 构建
 
