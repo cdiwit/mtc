@@ -1,0 +1,57 @@
+version: '1.0'
+name: windows-build
+displayName: Windows Build
+triggers:
+  push:
+    - matchType: PRECISE
+      branch: main
+    - matchType: PRECISE
+      branch: master
+  pullRequest:
+    - matchType: PRECISE
+      targetBranch: main
+    - matchType: PRECISE
+      targetBranch: master
+
+stages:
+  - name: build
+    displayName: 构建
+    strategy: naturally
+    trigger: auto
+    steps:
+      - step: shell@1
+        name: checkout
+        displayName: 检出代码
+        script:
+          - git clone $GITEE_REPO_URL --branch $GITEE_BRANCH --depth 1 .
+
+      - step: shell@1
+        name: setup-vcpkg
+        displayName: 设置 vcpkg
+        script:
+          - git clone https://github.com/microsoft/vcpkg.git
+          - cd vcpkg && bootstrap-vcpkg.bat
+
+      - step: shell@1
+        name: install-deps
+        displayName: 安装依赖
+        script:
+          - vcpkg\vcpkg install wxwidgets:x64-windows nlohmann-json:x64-windows
+
+      - step: shell@1
+        name: configure
+        displayName: 配置 CMake
+        script:
+          - cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=%CD%/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+
+      - step: shell@1
+        name: build
+        displayName: 构建项目
+        script:
+          - cmake --build build --config Release
+
+      - step: publish@1
+        name: upload-artifact
+        displayName: 上传构建产物
+        artifact: MTC-Windows-Release
+        source: bin/Release/
