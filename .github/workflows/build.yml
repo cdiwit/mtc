@@ -1,4 +1,4 @@
-name: Windows Build
+name: Multi-Platform Build
 
 on:
   push:
@@ -8,36 +8,62 @@ on:
 
 jobs:
   build:
-    name: Build on Windows
-    runs-on: windows-latest
-    
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: MTC-Windows-Release
+            triplet: x64-windows
+            output_path: bin/Release/
+          - os: ubuntu-latest
+            artifact: MTC-Linux-Release
+            triplet: x64-linux
+            output_path: bin/
+          - os: macos-latest
+            artifact: MTC-macOS-Release
+            triplet: x64-osx
+            output_path: bin/
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+
+    # Linux dependencies
+    - name: Install Linux dependencies
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+
+    # macOS dependencies
+    - name: Install macOS dependencies
+      if: runner.os == 'macOS'
+      run: |
+        brew install pkg-config
 
     - name: Restore vcpkg cache
       id: cache-vcpkg
       uses: actions/cache@v4
       with:
         path: vcpkg
-        key: ${{ runner.os }}-vcpkg-wxwidgets-json
+        key: ${{ runner.os }}-vcpkg-wxwidgets-json-v2
 
     - name: Setup vcpkg
       if: steps.cache-vcpkg.outputs.cache-hit != 'true'
       run: |
         git clone https://github.com/microsoft/vcpkg.git
-        .\vcpkg\bootstrap-vcpkg.bat
+        ${{ runner.os == 'Windows' && '.\\vcpkg\\bootstrap-vcpkg.bat' || './vcpkg/bootstrap-vcpkg.sh' }}
 
-    - name: Install dependencies
+    - name: Install dependencies via vcpkg
       run: |
-        if (!(Test-Path vcpkg\vcpkg.exe)) {
-            .\vcpkg\bootstrap-vcpkg.bat
-        }
-        .\vcpkg\vcpkg install wxwidgets:x64-windows nlohmann-json:x64-windows
+        ${{ runner.os == 'Windows' && '.\\vcpkg\\vcpkg' || './vcpkg/vcpkg' }} install wxwidgets:${{ matrix.triplet }} nlohmann-json:${{ matrix.triplet }}
 
     - name: Configure CMake
       run: |
-        cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows
+        cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: |
@@ -46,5 +72,5 @@ jobs:
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: MTC-Windows-Release
-        path: bin/Release/
+        name: ${{ matrix.artifact }}
+        path: ${{ matrix.output_path }}
