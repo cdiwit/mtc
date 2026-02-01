@@ -1,2 +1,7 @@
 /bin
 /build
+
+# macOS 图标生成脚本和临时文件
+resources/create_icns.sh
+resources/*.iconset
+resources/mtc.icns

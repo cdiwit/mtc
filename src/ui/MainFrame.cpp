@@ -31,8 +31,10 @@ MainFrame::MainFrame()
     UpdateButtonStates();
     UpdateStatusBar();
     
-    // Set application icon
+    // Set application icon (Windows only, macOS uses app bundle icon)
+#ifdef __WXMSW__
     SetIcon(wxIcon(wxT("APP_ICON"), wxBITMAP_TYPE_ICO_RESOURCE));
+#endif
     
     Centre();
 }

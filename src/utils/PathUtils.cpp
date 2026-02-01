@@ -23,7 +23,16 @@ fs::path GetExecutableDir() {
     char path[PATH_MAX];
     uint32_t size = sizeof(path);
     if (_NSGetExecutablePath(path, &size) == 0) {
-        return fs::canonical(fs::path(path)).parent_path();
+        fs::path execPath = fs::canonical(fs::path(path)).parent_path();
+        // macOS app bundle: 可执行文件在 mtc.app/Contents/MacOS/
+        // 资源文件在 mtc.app/Contents/Resources/
+        if (execPath.filename() == "MacOS") {
+            fs::path resourcesPath = execPath.parent_path() / "Resources";
+            if (fs::exists(resourcesPath)) {
+                return resourcesPath;
+            }
+        }
+        return execPath;
     }
     return fs::current_path();
     

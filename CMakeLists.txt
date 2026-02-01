@@ -33,13 +33,27 @@ if(WIN32)
     set(CMAKE_WIN32_EXECUTABLE ON)
 endif()
 
+# macOS 配置
+if(APPLE)
+    set(MACOSX_BUNDLE_ICON_FILE mtc.icns)
+    set(APP_ICON_MACOS ${CMAKE_SOURCE_DIR}/resources/mtc.icns)
+    set_source_files_properties(${APP_ICON_MACOS} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources"
+    )
+    list(APPEND SOURCES ${APP_ICON_MACOS})
+endif()
+
 # MSVC UTF-8 编译选项
 if(MSVC)
     add_compile_options(/utf-8)
 endif()
 
 # 创建可执行文件
-add_executable(mtc ${SOURCES})
+if(APPLE)
+    add_executable(mtc MACOSX_BUNDLE ${SOURCES})
+else()
+    add_executable(mtc ${SOURCES})
+endif()
 
 # 链接库
 target_link_libraries(mtc PRIVATE 
@@ -57,6 +71,18 @@ set_target_properties(mtc PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin
 )
 
+# macOS Bundle 配置
+if(APPLE)
+    set_target_properties(mtc PROPERTIES
+        MACOSX_BUNDLE TRUE
+        MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/resources/Info.plist
+        MACOSX_BUNDLE_BUNDLE_NAME "MTC"
+        MACOSX_BUNDLE_BUNDLE_VERSION "1.0.0"
+        MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "com.mtc.terminal-manager"
+    )
+endif()
+
 # 静态链接运行时（Windows MSVC）
 if(MSVC)
     set_property(TARGET mtc PROPERTY
@@ -64,6 +90,13 @@ if(MSVC)
 endif()
 
 # 复制数据目录到输出目录
-add_custom_command(TARGET mtc POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:mtc>/data
-)
+if(APPLE)
+    # macOS: 复制到 app bundle 的 Resources 目录
+    add_custom_command(TARGET mtc POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:mtc>/Resources/data
+    )
+else()
+    add_custom_command(TARGET mtc POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:mtc>/data
+    )
+endif()
