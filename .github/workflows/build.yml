@@ -22,7 +22,7 @@ jobs:
             artifact: MTC-Linux-Release
             triplet: x64-linux
             output_path: bin/
-          - os: macos-13
+          - os: macos-15-intel
             artifact: MTC-macOS-x64-Release
             triplet: x64-osx
             output_path: bin/
@@ -40,7 +40,7 @@ jobs:
       if: runner.os == 'Linux'
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgtk-3-dev autoconf autoconf-archive automake libtool pkg-config
+        sudo apt-get install -y libgtk-3-dev autoconf autoconf-archive automake libtool libltdl-dev pkg-config
 
     # macOS dependencies
     - name: Install macOS dependencies
