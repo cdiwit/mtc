@@ -12,9 +12,13 @@
 
 ## 截图
 
-![MTC 主界面](docs/screenshot.png)
+<p align="center">
+  <img src="docs/screenshot.png" alt="MTC 主界面" />
+</p>
 
-![新建配置对话框](docs/screenshot2.png)
+<p align="center">
+  <img src="docs/screenshot2.png" alt="新建配置对话框" />
+</p>
 
 ## 下载
 
