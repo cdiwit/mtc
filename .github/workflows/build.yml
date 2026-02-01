@@ -59,6 +59,29 @@ jobs:
       run: |
         ${{ runner.os == 'Windows' && '.\\vcpkg\\vcpkg' || './vcpkg/vcpkg' }} install wxwidgets:${{ matrix.triplet }} nlohmann-json:${{ matrix.triplet }}
 
+    # macOS: 生成 icns 图标文件（如果不存在）
+    - name: Generate macOS icon
+      if: runner.os == 'macOS'
+      run: |
+        cd resources
+        if [ -f "mtc.icns" ]; then
+          echo "mtc.icns already exists, skipping generation"
+          exit 0
+        fi
+        mkdir -p mtc.iconset
+        sips -s format png mtc.ico --out mtc_temp.png
+        for size in 16 32 64 128 256 512; do
+          sips -z $size $size mtc_temp.png --out mtc.iconset/icon_${size}x${size}.png
+        done
+        sips -z 32 32 mtc_temp.png --out mtc.iconset/icon_16x16@2x.png
+        sips -z 64 64 mtc_temp.png --out mtc.iconset/icon_32x32@2x.png
+        sips -z 128 128 mtc_temp.png --out mtc.iconset/icon_64x64@2x.png
+        sips -z 256 256 mtc_temp.png --out mtc.iconset/icon_128x128@2x.png
+        sips -z 512 512 mtc_temp.png --out mtc.iconset/icon_256x256@2x.png
+        sips -z 1024 1024 mtc_temp.png --out mtc.iconset/icon_512x512@2x.png
+        iconutil -c icns mtc.iconset -o mtc.icns
+        rm -rf mtc.iconset mtc_temp.png
+
     - name: Configure CMake
       run: |
         cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} -DCMAKE_BUILD_TYPE=Release
