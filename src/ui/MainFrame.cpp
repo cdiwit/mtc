@@ -9,8 +9,6 @@
 #include <wx/choicdlg.h>
 
 #include <algorithm>
-#include <functional>
-#include <iterator>
 #include <utility>
 
 wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)

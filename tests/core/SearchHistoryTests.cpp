@@ -68,3 +68,12 @@ TEST(SearchHistoryTests, ClearOnEmptyIsSafe) {
     ClearSearchHistory(history);
     EXPECT_TRUE(history.empty());
 }
+
+TEST(SearchHistoryTests, AddTrimmedDuplicateMovesToFront) {
+    std::vector<std::string> history = {"alpha", "hello", "beta"};
+    AddToSearchHistory(history, "  hello  ");
+    ASSERT_EQ(history.size(), 3u);
+    EXPECT_EQ(history[0], "hello");
+    EXPECT_EQ(history[1], "alpha");
+    EXPECT_EQ(history[2], "beta");
+}
