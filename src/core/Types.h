@@ -36,11 +36,6 @@ struct Profile {
     std::string updatedAt;
 };
 
-enum class ProfileViewMode {
-    List,
-    Tree
-};
-
 struct ProfileTreeNode {
     std::string label;
     std::string fullPath;
