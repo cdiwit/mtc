@@ -36,12 +36,25 @@ struct Profile {
     std::string updatedAt;
 };
 
+enum class ProfileViewMode {
+    List,
+    Tree
+};
+
+struct ProfileTreeNode {
+    std::string label;
+    std::string fullPath;
+    std::vector<ProfileTreeNode> children;
+    std::vector<const Profile*> profiles;
+};
+
 // 应用程序设置
 struct AppSettings {
     TerminalType defaultTerminalType = TerminalType::Auto;
     std::string language = "zh-CN";
     std::string theme = "system";
     bool autoBackup = true;
+    std::vector<std::string> searchHistory;
 };
 
 // 完整配置
