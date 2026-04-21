@@ -1,5 +1,6 @@
 #pragma once
 #include "Types.h"
+#include "SearchHistory.h"
 #include <string>
 #include <filesystem>
 #include <functional>
@@ -38,6 +39,9 @@ public:
     // 设置
     const AppSettings& GetSettings() const { return m_config.settings; }
     void UpdateSettings(const AppSettings& settings);
+    void AddSearchHistory(const std::string& keyword);
+    void RemoveSearchHistory(const std::string& keyword);
+    void ClearSearchHistory();
     
     // 备份
     bool CreateBackup();

@@ -95,6 +95,15 @@ bool ConfigManager::LoadConfig() {
             m_config.settings.language = js.value("language", "zh-CN");
             m_config.settings.theme = js.value("theme", "system");
             m_config.settings.autoBackup = js.value("autoBackup", true);
+
+            m_config.settings.searchHistory.clear();
+            if (js.contains("searchHistory") && js["searchHistory"].is_array()) {
+                for (const auto& item : js["searchHistory"]) {
+                    if (item.is_string()) {
+                        m_config.settings.searchHistory.push_back(item.get<std::string>());
+                    }
+                }
+            }
         }
         
         return true;
@@ -148,6 +157,12 @@ bool ConfigManager::SaveConfig() {
             {"theme", m_config.settings.theme},
             {"autoBackup", m_config.settings.autoBackup}
         };
+
+        json searchHistoryJson = json::array();
+        for (const auto& item : m_config.settings.searchHistory) {
+            searchHistoryJson.push_back(item);
+        }
+        j["settings"]["searchHistory"] = searchHistoryJson;
         
         // 写入文件
         std::ofstream file(m_configPath);
@@ -322,6 +337,21 @@ bool ConfigManager::ImportConfig(const fs::path& filePath) {
 
 void ConfigManager::UpdateSettings(const AppSettings& settings) {
     m_config.settings = settings;
+    SaveConfig();
+}
+
+void ConfigManager::AddSearchHistory(const std::string& keyword) {
+    ::AddToSearchHistory(m_config.settings.searchHistory, keyword);
+    SaveConfig();
+}
+
+void ConfigManager::RemoveSearchHistory(const std::string& keyword) {
+    ::RemoveFromSearchHistory(m_config.settings.searchHistory, keyword);
+    SaveConfig();
+}
+
+void ConfigManager::ClearSearchHistory() {
+    ::ClearSearchHistory(m_config.settings.searchHistory);
     SaveConfig();
 }
 
