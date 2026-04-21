@@ -10,6 +10,7 @@ public:
 private:
     // 控件
     wxTextCtrl* m_searchCtrl;
+    wxButton* m_btnClearSearch;
     wxButton* m_btnSearchHistory;
     wxListView* m_listView;
     wxButton* m_btnNew;
@@ -52,6 +53,7 @@ private:
     void OnListSelectionChanged(wxListEvent& event);
     void OnSearchTextChanged(wxCommandEvent& event);
     void OnSearchEnter(wxCommandEvent& event);
+    void OnClearSearch(wxCommandEvent& event);
     void OnSearchHistoryClicked(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
 
@@ -67,6 +69,7 @@ private:
 enum {
     ID_LIST_PROFILES = wxID_HIGHEST + 1,
     ID_SEARCH_CTRL,
+    ID_BTN_CLEAR_SEARCH,
     ID_BTN_SEARCH_HISTORY,
     ID_BTN_NEW,
     ID_BTN_EDIT,

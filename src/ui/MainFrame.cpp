@@ -21,6 +21,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_BTN_EXPORT, MainFrame::OnExport)
     EVT_TEXT(ID_SEARCH_CTRL, MainFrame::OnSearchTextChanged)
     EVT_TEXT_ENTER(ID_SEARCH_CTRL, MainFrame::OnSearchEnter)
+    EVT_BUTTON(ID_BTN_CLEAR_SEARCH, MainFrame::OnClearSearch)
     EVT_BUTTON(ID_BTN_SEARCH_HISTORY, MainFrame::OnSearchHistoryClicked)
     EVT_LIST_ITEM_ACTIVATED(ID_LIST_PROFILES, MainFrame::OnListDoubleClick)
     EVT_LIST_ITEM_SELECTED(ID_LIST_PROFILES, MainFrame::OnListSelectionChanged)
@@ -92,14 +93,18 @@ void MainFrame::CreateControls() {
     // 右侧面板
     wxBoxSizer* rightSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 搜索栏：搜索框 + 历史按钮
+    // 搜索栏：搜索框 + 清除按钮 + 历史按钮
     wxBoxSizer* searchSizer = new wxBoxSizer(wxHORIZONTAL);
     m_searchCtrl = new wxTextCtrl(panel, ID_SEARCH_CTRL, wxEmptyString,
                                   wxDefaultPosition, wxDefaultSize, wxTE_PROCESS_ENTER);
     m_searchCtrl->SetHint(wxT("搜索名称、描述或工作目录"));
+    m_btnClearSearch = new wxButton(panel, ID_BTN_CLEAR_SEARCH, wxT("清除"),
+                                    wxDefaultPosition, wxSize(52, -1));
+    m_btnClearSearch->Enable(false);
     m_btnSearchHistory = new wxButton(panel, ID_BTN_SEARCH_HISTORY, wxT("历史"),
                                       wxDefaultPosition, wxSize(60, -1));
     searchSizer->Add(m_searchCtrl, 1, wxEXPAND | wxRIGHT, 5);
+    searchSizer->Add(m_btnClearSearch, 0, wxRIGHT, 5);
     searchSizer->Add(m_btnSearchHistory, 0);
     rightSizer->Add(searchSizer, 0, wxEXPAND | wxBOTTOM, 10);
 
@@ -226,8 +231,13 @@ void MainFrame::UpdateButtonStates() {
 }
 
 void MainFrame::UpdateStatusBar() {
-    size_t count = ConfigManager::GetInstance().GetProfiles().size();
-    m_statusBar->SetStatusText(wxString::Format(wxT("共 %zu 个配置"), count));
+    size_t total = ConfigManager::GetInstance().GetProfiles().size();
+    if (m_searchText.empty()) {
+        m_statusBar->SetStatusText(wxString::Format(wxT("共 %zu 个配置"), total));
+    } else {
+        m_statusBar->SetStatusText(
+            wxString::Format(wxT("显示 %zu / 共 %zu 个配置"), m_visibleProfiles.size(), total));
+    }
 }
 
 void MainFrame::OnNewProfile(wxCommandEvent& event) {
@@ -375,12 +385,20 @@ void MainFrame::OnListSelectionChanged(wxListEvent& event) {
 
 void MainFrame::OnSearchTextChanged(wxCommandEvent& event) {
     m_searchText = event.GetString().utf8_string();
+    m_btnClearSearch->Enable(!m_searchText.empty());
     RefreshView();
 }
 
 void MainFrame::OnSearchEnter(wxCommandEvent& event) {
     std::string keyword = event.GetString().utf8_string();
     ConfigManager::GetInstance().AddSearchHistory(keyword);
+}
+
+void MainFrame::OnClearSearch(wxCommandEvent& event) {
+    m_searchCtrl->Clear();
+    m_searchText.clear();
+    m_btnClearSearch->Enable(false);
+    RefreshView();
 }
 
 void MainFrame::OnSearchHistoryClicked(wxCommandEvent& event) {
