@@ -58,6 +58,7 @@ private:
     void OnClearSearch(wxCommandEvent& event);
     void OnSearchHistoryClicked(wxCommandEvent& event);
     void OnClose(wxCloseEvent& event);
+    void OnSysColourChanged(wxSysColourChangedEvent& event);
 
     // 辅助方法
     int GetSelectedIndex();

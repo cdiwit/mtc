@@ -28,6 +28,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_LIST_ITEM_SELECTED(ID_LIST_PROFILES, MainFrame::OnListSelectionChanged)
     EVT_LIST_ITEM_DESELECTED(ID_LIST_PROFILES, MainFrame::OnListSelectionChanged)
     EVT_CLOSE(MainFrame::OnClose)
+    EVT_SYS_COLOUR_CHANGED(MainFrame::OnSysColourChanged)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame()
@@ -49,7 +50,6 @@ MainFrame::MainFrame()
 
 void MainFrame::CreateControls() {
     wxPanel* panel = new wxPanel(this);
-    panel->SetBackgroundColour(wxColour(245, 245, 245));
 
     wxBoxSizer* mainSizer = new wxBoxSizer(wxHORIZONTAL);
 
@@ -496,6 +496,11 @@ void MainFrame::ShowSearchHistoryMenu() {
 
 void MainFrame::OnClose(wxCloseEvent& event) {
     ConfigManager::GetInstance().SaveConfig();
+    event.Skip();
+}
+
+void MainFrame::OnSysColourChanged(wxSysColourChangedEvent& event) {
+    Refresh();
     event.Skip();
 }
 
