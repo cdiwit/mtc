@@ -18,7 +18,12 @@ private:
     wxTextCtrl* m_txtName;
     wxTextCtrl* m_txtDescription;
     wxTextCtrl* m_txtWorkingDir;
+    wxTextCtrl* m_txtLinuxWorkingDir;
+    wxTextCtrl* m_txtMacWorkingDir;
     wxButton* m_btnBrowse;
+    wxButton* m_btnBrowseLinux;
+    wxButton* m_btnBrowseMac;
+    wxButton* m_btnOpenWorkDir;
     wxChoice* m_choiceTerminal;
     EnvVarPanel* m_envVarPanel;
     
@@ -30,8 +35,11 @@ private:
     void InitializeFromProfile(const Profile& profile);
     
     void OnBrowse(wxCommandEvent& event);
+    void OnBrowseLinux(wxCommandEvent& event);
+    void OnBrowseMac(wxCommandEvent& event);
+    void OnOpenWorkDir(wxCommandEvent& event);
     void OnOK(wxCommandEvent& event);
-    
+
     wxDECLARE_EVENT_TABLE();
 };
 
@@ -40,6 +48,11 @@ enum ProfileDialogIds {
     ID_PROFILE_NAME = wxID_HIGHEST + 200,
     ID_PROFILE_DESC,
     ID_PROFILE_WORKDIR,
+    ID_PROFILE_LINUX_WORKDIR,
+    ID_PROFILE_MAC_WORKDIR,
     ID_PROFILE_BROWSE,
+    ID_PROFILE_BROWSE_LINUX,
+    ID_PROFILE_BROWSE_MAC,
+    ID_PROFILE_OPEN_WORKDIR,
     ID_PROFILE_TERMINAL
 };

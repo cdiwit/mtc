@@ -1,5 +1,21 @@
 /bin
 /build
+/build-*
+
+# 数据目录（运行时生成）
+data/
 
 # macOS 图标生成的临时文件
 resources/*.iconset
+
+# macOS 图标（CI 动态生成，不纳入仓库）
+resources/mtc.icns
+
+# 测试结果
+test_results.xml
+
+# Claude Code / AI 工具生成的临时文件
+.superpowers/
+
+# macOS 杂项
+.DS_Store

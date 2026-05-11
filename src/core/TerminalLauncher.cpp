@@ -9,10 +9,12 @@
 #elif defined(__linux__) || defined(__APPLE__)
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <cstring>
 #include <fcntl.h>
 #include <cerrno>
 #include <cstdio>
+#include <fstream>
 #include <memory>
 #include <array>
 extern char** environ;
@@ -233,7 +235,7 @@ bool TerminalLauncher::LaunchWindows(
     std::string* errorMsg
 ) {
     std::wstring command, args;
-    std::wstring workDir = Utf8ToWide(profile.workingDirectory);
+    std::wstring workDir = Utf8ToWide(profile.GetWorkingDirectory());
     
     TerminalType type = profile.terminalType;
     if (type == TerminalType::Auto) {
@@ -269,8 +271,9 @@ bool TerminalLauncher::LaunchWindows(
                 }
                 
                 // 切换目录
-                if (!profile.workingDirectory.empty()) {
-                    std::string wd = profile.workingDirectory;
+                std::string effectiveWorkDir = profile.GetWorkingDirectory();
+                if (!effectiveWorkDir.empty()) {
+                    std::string wd = effectiveWorkDir;
                     // 转义
                     size_t pos = 0;
                     while ((pos = wd.find("'", pos)) != std::string::npos) {
@@ -428,8 +431,9 @@ bool TerminalLauncher::LaunchLinux(
         }
         
         // Change work dir
-        if (!profile.workingDirectory.empty()) {
-            if (chdir(profile.workingDirectory.c_str()) != 0) {
+        std::string effectiveWorkDir = profile.GetWorkingDirectory();
+        if (!effectiveWorkDir.empty()) {
+            if (chdir(effectiveWorkDir.c_str()) != 0) {
                 int err = errno;
                 write(pipefd[1], &err, sizeof(err));
                 _exit(1);
@@ -485,55 +489,81 @@ bool TerminalLauncher::LaunchMacOS(
     const std::map<std::string, std::string>& env,
     std::string* errorMsg
 ) {
-    // Build AppleScript
-    std::string script = "tell application \"Terminal\"\n";
-    script += "  activate\n";
-    script += "  do script \"";
-    
-    // Change directory
-    if (!profile.workingDirectory.empty()) {
-        script += "cd '" + profile.workingDirectory + "'";
+    // Create a temporary shell script to set up environment silently
+    std::string scriptPath = "/tmp/mtc_init_" + std::to_string(std::time(nullptr)) + ".sh";
+
+    std::ofstream scriptFile(scriptPath);
+    if (!scriptFile.is_open()) {
+        if (errorMsg) *errorMsg = "Failed to create init script";
+        return false;
     }
-    
+
+    scriptFile << "#!/bin/bash\n";
+
+    // Change directory
+    std::string effectiveWorkDir = profile.GetWorkingDirectory();
+    if (!effectiveWorkDir.empty()) {
+        std::string escaped = effectiveWorkDir;
+        for (size_t pos = 0; (pos = escaped.find('\'', pos)) != std::string::npos; pos += 4) {
+            escaped.replace(pos, 1, "'\"'\"'");
+        }
+        scriptFile << "cd '" << escaped << "'\n";
+    }
+
     // Set environment variables
     for (const auto& var : profile.environmentVariables) {
-        script += " && export " + var.name + "='" + var.value + "'";
+        std::string escapedName = var.name;
+        std::string escapedValue = var.value;
+        for (size_t pos = 0; (pos = escapedValue.find('\'', pos)) != std::string::npos; pos += 4) {
+            escapedValue.replace(pos, 1, "'\"'\"'");
+        }
+        scriptFile << "export " << escapedName << "='" << escapedValue << "'\n";
     }
-    
-    script += "\"\n";
-    script += "end tell";
-    
-    // Escape single quotes for shell
+
+    // Remove the script itself and clear screen
+    scriptFile << "rm -f '" << scriptPath << "'\n";
+    scriptFile << "clear\n";
+    scriptFile.close();
+
+    chmod(scriptPath.c_str(), 0700);
+
+    // Use AppleScript to open Terminal and source the script
+    // Use . (dot) instead of source to avoid quoting issues
+    std::string appleScript = "tell application \"Terminal\"\n"
+        "  activate\n"
+        "  do script \". " + scriptPath + "\"\n"
+        "end tell";
+
+    // Escape single quotes for osascript
     std::string escapedScript;
-    for (char c : script) {
+    for (char c : appleScript) {
         if (c == '\'') {
             escapedScript += "'\"'\"'";
         } else {
             escapedScript += c;
         }
     }
-    
-    // Redirect stderr to stdout to capture error message
+
     std::string cmd = "osascript -e '" + escapedScript + "' 2>&1";
-    
+
     FILE* fp = popen(cmd.c_str(), "r");
     if (!fp) {
+        remove(scriptPath.c_str());
         if (errorMsg) *errorMsg = "Failed to run osascript: " + std::string(strerror(errno));
         return false;
     }
 
-    // Read output (which contains error if failed)
     std::array<char, 128> buffer;
     std::string result;
     while (fgets(buffer.data(), buffer.size(), fp) != nullptr) {
         result += buffer.data();
     }
-    
+
     int status = pclose(fp);
-    
+
     if (status != 0) {
+        remove(scriptPath.c_str());
         if (errorMsg) {
-             // Remove trailing newline
             if (!result.empty() && result.back() == '\n') {
                 result.pop_back();
             }
@@ -541,7 +571,7 @@ bool TerminalLauncher::LaunchMacOS(
         }
         return false;
     }
-    
+
     return true;
 }
 #endif

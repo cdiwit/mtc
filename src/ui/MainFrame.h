@@ -20,6 +20,7 @@ private:
     wxButton* m_btnDuplicate;
     wxButton* m_btnImport;
     wxButton* m_btnExport;
+    wxButton* m_btnOpenDir;
     wxStatusBar* m_statusBar;
 
     std::string m_searchText;
@@ -49,6 +50,7 @@ private:
     void OnDuplicateProfile(wxCommandEvent& event);
     void OnImport(wxCommandEvent& event);
     void OnExport(wxCommandEvent& event);
+    void OnOpenWorkDir(wxCommandEvent& event);
     void OnListDoubleClick(wxListEvent& event);
     void OnListSelectionChanged(wxListEvent& event);
     void OnSearchTextChanged(wxCommandEvent& event);
@@ -77,5 +79,6 @@ enum {
     ID_BTN_LAUNCH,
     ID_BTN_DUPLICATE,
     ID_BTN_IMPORT,
-    ID_BTN_EXPORT
+    ID_BTN_EXPORT,
+    ID_BTN_OPEN_DIR
 };

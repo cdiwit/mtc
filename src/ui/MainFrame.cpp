@@ -19,6 +19,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_BTN_DUPLICATE, MainFrame::OnDuplicateProfile)
     EVT_BUTTON(ID_BTN_IMPORT, MainFrame::OnImport)
     EVT_BUTTON(ID_BTN_EXPORT, MainFrame::OnExport)
+    EVT_BUTTON(ID_BTN_OPEN_DIR, MainFrame::OnOpenWorkDir)
     EVT_TEXT(ID_SEARCH_CTRL, MainFrame::OnSearchTextChanged)
     EVT_TEXT_ENTER(ID_SEARCH_CTRL, MainFrame::OnSearchEnter)
     EVT_BUTTON(ID_BTN_CLEAR_SEARCH, MainFrame::OnClearSearch)
@@ -68,8 +69,10 @@ void MainFrame::CreateControls() {
 
     m_btnLaunch = new wxButton(panel, ID_BTN_LAUNCH, wxT("▶ 启动终端"),
                                wxDefaultPosition, wxSize(140, 45));
+#ifdef _WIN32
     m_btnLaunch->SetBackgroundColour(wxColour(46, 204, 113));
     m_btnLaunch->SetForegroundColour(*wxWHITE);
+#endif
     wxFont launchFont = m_btnLaunch->GetFont();
     launchFont.SetWeight(wxFONTWEIGHT_BOLD);
     m_btnLaunch->SetFont(launchFont);
@@ -77,6 +80,7 @@ void MainFrame::CreateControls() {
     m_btnDuplicate = new wxButton(panel, ID_BTN_DUPLICATE, wxT("复制"), wxDefaultPosition, btnSize);
     m_btnImport = new wxButton(panel, ID_BTN_IMPORT, wxT("导入..."), wxDefaultPosition, btnSize);
     m_btnExport = new wxButton(panel, ID_BTN_EXPORT, wxT("导出..."), wxDefaultPosition, btnSize);
+    m_btnOpenDir = new wxButton(panel, ID_BTN_OPEN_DIR, wxT("打开目录"), wxDefaultPosition, btnSize);
 
     leftSizer->Add(m_btnNew, 0, wxEXPAND | wxBOTTOM, 8);
     leftSizer->Add(m_btnEdit, 0, wxEXPAND | wxBOTTOM, 8);
@@ -85,7 +89,9 @@ void MainFrame::CreateControls() {
     leftSizer->Add(new wxStaticLine(panel, wxID_ANY), 0, wxEXPAND | wxBOTTOM, 14);
     leftSizer->Add(m_btnDuplicate, 0, wxEXPAND | wxBOTTOM, 8);
     leftSizer->Add(m_btnImport, 0, wxEXPAND | wxBOTTOM, 8);
-    leftSizer->Add(m_btnExport, 0, wxEXPAND);
+    leftSizer->Add(m_btnExport, 0, wxEXPAND | wxBOTTOM, 14);
+    leftSizer->Add(new wxStaticLine(panel, wxID_ANY), 0, wxEXPAND | wxBOTTOM, 14);
+    leftSizer->Add(m_btnOpenDir, 0, wxEXPAND);
     leftSizer->AddStretchSpacer();
 
     mainSizer->Add(leftSizer, 0, wxEXPAND | wxALL, 15);
@@ -193,7 +199,7 @@ void MainFrame::RefreshListView() {
 
         long index = m_listView->InsertItem(static_cast<long>(i), wxString::FromUTF8(profile->name));
         m_listView->SetItem(index, 1, wxString::FromUTF8(profile->description));
-        m_listView->SetItem(index, 2, wxString::FromUTF8(profile->workingDirectory));
+        m_listView->SetItem(index, 2, wxString::FromUTF8(profile->GetWorkingDirectory()));
         m_listView->SetItem(index, 3, wxString::FromUTF8(TerminalTypeDisplayName(profile->terminalType)));
     }
 }
@@ -366,6 +372,34 @@ void MainFrame::OnExport(wxCommandEvent& event) {
             wxMessageBox(wxT("配置导出失败"), wxT("错误"), wxOK | wxICON_ERROR, this);
         }
     }
+}
+
+void MainFrame::OnOpenWorkDir(wxCommandEvent& event) {
+    const Profile* profile = GetSelectedProfile();
+    if (!profile) {
+        wxMessageBox(wxT("请先选择一个配置"), wxT("提示"), wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    std::string dir = profile->GetWorkingDirectory();
+    if (dir.empty()) {
+        wxMessageBox(wxT("该配置未设置当前平台的工作目录"), wxT("提示"), wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    if (!fs::exists(dir)) {
+        wxMessageBox(wxString::Format(wxT("目录不存在:\n%s"), wxString::FromUTF8(dir)),
+                     wxT("错误"), wxOK | wxICON_WARNING, this);
+        return;
+    }
+
+#ifdef _WIN32
+    ShellExecuteW(nullptr, L"explore", wxString::FromUTF8(dir).wc_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+    system(("open \"" + dir + "\"").c_str());
+#elif defined(__linux__)
+    system(("xdg-open \"" + dir + "\"").c_str());
+#endif
 }
 
 void MainFrame::OnListDoubleClick(wxListEvent& event) {

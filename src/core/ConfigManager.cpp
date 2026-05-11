@@ -62,6 +62,8 @@ bool ConfigManager::LoadConfig() {
                 profile.name = jp.value("name", "");
                 profile.description = jp.value("description", "");
                 profile.workingDirectory = jp.value("workingDirectory", "");
+                profile.linuxWorkingDirectory = jp.value("linuxWorkingDirectory", "");
+                profile.macWorkingDirectory = jp.value("macWorkingDirectory", "");
                 
                 // 解析终端类型
                 std::string termType = jp.value("terminalType", "auto");
@@ -133,6 +135,8 @@ bool ConfigManager::SaveConfig() {
             jp["name"] = profile.name;
             jp["description"] = profile.description;
             jp["workingDirectory"] = profile.workingDirectory;
+            jp["linuxWorkingDirectory"] = profile.linuxWorkingDirectory;
+            jp["macWorkingDirectory"] = profile.macWorkingDirectory;
             jp["terminalType"] = TerminalTypeToString(profile.terminalType);
             
             // 序列化环境变量

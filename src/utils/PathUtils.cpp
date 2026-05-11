@@ -25,9 +25,14 @@ fs::path GetExecutableDir() {
     if (_NSGetExecutablePath(path, &size) == 0) {
         fs::path execPath = fs::canonical(fs::path(path)).parent_path();
         // macOS app bundle: 可执行文件在 mtc.app/Contents/MacOS/
-        // 资源文件在 mtc.app/Contents/Resources/
         if (execPath.filename() == "MacOS") {
+            fs::path bundlePath = execPath.parent_path().parent_path();
             fs::path resourcesPath = execPath.parent_path() / "Resources";
+            // 优先使用 app bundle 外部的 data 目录（与 mtc.app 同级的 data/）
+            fs::path externalData = bundlePath.parent_path() / "data";
+            if (fs::exists(externalData)) {
+                return bundlePath.parent_path();
+            }
             if (fs::exists(resourcesPath)) {
                 return resourcesPath;
             }

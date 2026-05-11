@@ -29,11 +29,15 @@ struct Profile {
     std::string id;
     std::string name;
     std::string description;
-    std::string workingDirectory;
+    std::string workingDirectory;          // Windows 工作目录
+    std::string linuxWorkingDirectory;     // Linux 工作目录
+    std::string macWorkingDirectory;       // macOS 工作目录
     TerminalType terminalType = TerminalType::Auto;
     std::vector<EnvVariable> environmentVariables;
     std::string createdAt;
     std::string updatedAt;
+
+    std::string GetWorkingDirectory() const;
 };
 
 struct ProfileTreeNode {
@@ -99,4 +103,21 @@ inline std::string TerminalTypeDisplayName(TerminalType type) {
         case TerminalType::ITerm2: return "iTerm2";
         default: return "未知";
     }
+}
+
+inline std::string Profile::GetWorkingDirectory() const {
+#ifdef _WIN32
+    if (!workingDirectory.empty()) return workingDirectory;
+    if (!linuxWorkingDirectory.empty()) return linuxWorkingDirectory;
+    if (!macWorkingDirectory.empty()) return macWorkingDirectory;
+#elif defined(__linux__)
+    if (!linuxWorkingDirectory.empty()) return linuxWorkingDirectory;
+    if (!workingDirectory.empty()) return workingDirectory;
+    if (!macWorkingDirectory.empty()) return macWorkingDirectory;
+#elif defined(__APPLE__)
+    if (!macWorkingDirectory.empty()) return macWorkingDirectory;
+    if (!workingDirectory.empty()) return workingDirectory;
+    if (!linuxWorkingDirectory.empty()) return linuxWorkingDirectory;
+#endif
+    return "";
 }
