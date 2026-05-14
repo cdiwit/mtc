@@ -82,6 +82,19 @@ bool ConfigManager::LoadConfig() {
                     }
                 }
                 
+                // 解析启动命令
+                profile.startupCommands.clear();
+                if (jp.contains("startupCommands")) {
+                    for (const auto& cmd : jp["startupCommands"]) {
+                        if (cmd.is_string()) {
+                            std::string s = cmd.get<std::string>();
+                            if (!s.empty()) {
+                                profile.startupCommands.push_back(s);
+                            }
+                        }
+                    }
+                }
+
                 profile.createdAt = jp.value("createdAt", "");
                 profile.updatedAt = jp.value("updatedAt", "");
                 
@@ -148,6 +161,12 @@ bool ConfigManager::SaveConfig() {
                 });
             }
             
+            // 序列化启动命令
+            jp["startupCommands"] = json::array();
+            for (const auto& cmd : profile.startupCommands) {
+                jp["startupCommands"].push_back(cmd);
+            }
+
             jp["createdAt"] = profile.createdAt;
             jp["updatedAt"] = profile.updatedAt;
             

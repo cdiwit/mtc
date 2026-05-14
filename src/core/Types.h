@@ -34,6 +34,7 @@ struct Profile {
     std::string macWorkingDirectory;       // macOS 工作目录
     TerminalType terminalType = TerminalType::Auto;
     std::vector<EnvVariable> environmentVariables;
+    std::vector<std::string> startupCommands;  // 终端启动后自动执行的命令列表
     std::string createdAt;
     std::string updatedAt;
 

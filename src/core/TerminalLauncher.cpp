@@ -282,7 +282,20 @@ bool TerminalLauncher::LaunchWindows(
                     }
                     script << "Set-Location '" << wd << "'" << std::endl;
                 }
-                
+
+                // Execute startup commands
+                for (const auto& cmd : profile.startupCommands) {
+                    if (!cmd.empty()) {
+                        std::string escapedCmd = cmd;
+                        size_t cmdPos = 0;
+                        while ((cmdPos = escapedCmd.find("'", cmdPos)) != std::string::npos) {
+                            escapedCmd.replace(cmdPos, 1, "''");
+                            cmdPos += 2;
+                        }
+                        script << escapedCmd << std::endl;
+                    }
+                }
+
                 // 清理脚本自身 (可选，但为了调试先保留，或者利用 Start-Job 删除)
                 // script << "Remove-Item $MyInvocation.MyCommand.Path" << std::endl;
                 
@@ -396,89 +409,144 @@ bool TerminalLauncher::LaunchLinux(
     const std::map<std::string, std::string>& env,
     std::string* errorMsg
 ) {
+    // Create a temporary shell script to set up environment
+    bool hasStartupCommands = !profile.startupCommands.empty();
+    std::string scriptPath;
+    std::string effectiveWorkDir = profile.GetWorkingDirectory();
+
+    if (hasStartupCommands || !effectiveWorkDir.empty() || !profile.environmentVariables.empty()) {
+        scriptPath = "/tmp/mtc_init_" + std::to_string(std::time(nullptr)) + ".sh";
+        std::ofstream scriptFile(scriptPath);
+        if (!scriptFile.is_open()) {
+            if (errorMsg) *errorMsg = "Failed to create init script";
+            return false;
+        }
+
+        scriptFile << "#!/bin/bash\n";
+
+        // Change directory
+        if (!effectiveWorkDir.empty()) {
+            std::string escaped = effectiveWorkDir;
+            for (size_t pos = 0; (pos = escaped.find('\'', pos)) != std::string::npos; pos += 4) {
+                escaped.replace(pos, 1, "'\"'\"'");
+            }
+            scriptFile << "cd '" << escaped << "'\n";
+        }
+
+        // Set environment variables
+        for (const auto& var : profile.environmentVariables) {
+            std::string escapedValue = var.value;
+            for (size_t pos = 0; (pos = escapedValue.find('\'', pos)) != std::string::npos; pos += 4) {
+                escapedValue.replace(pos, 1, "'\"'\"'");
+            }
+            scriptFile << "export " << var.name << "='" << escapedValue << "'\n";
+        }
+
+        // Execute startup commands
+        for (const auto& cmd : profile.startupCommands) {
+            if (!cmd.empty()) {
+                scriptFile << cmd << "\n";
+            }
+        }
+
+        // Remove the script itself
+        scriptFile << "rm -f '" << scriptPath << "'\n";
+        scriptFile << "clear\n";
+        scriptFile.close();
+
+        chmod(scriptPath.c_str(), 0700);
+    }
+
     int pipefd[2];
     if (pipe(pipefd) == -1) {
         if (errorMsg) *errorMsg = "Failed to create pipe: " + std::string(strerror(errno));
+        if (!scriptPath.empty()) remove(scriptPath.c_str());
         return false;
     }
 
-    // Set O_CLOEXEC so pipe is closed in child on successful exec
-    // This is crucial: if exec succeeds, write end is closed, read returns 0.
-    // If exec fails, child writes errno and exits.
     if (fcntl(pipefd[1], F_SETFD, FD_CLOEXEC) == -1) {
         if (errorMsg) *errorMsg = "Failed to set FD_CLOEXEC: " + std::string(strerror(errno));
         close(pipefd[0]);
         close(pipefd[1]);
+        if (!scriptPath.empty()) remove(scriptPath.c_str());
         return false;
     }
 
     pid_t pid = fork();
-    
+
     if (pid == -1) {
          if (errorMsg) *errorMsg = "Failed to fork: " + std::string(strerror(errno));
          close(pipefd[0]);
          close(pipefd[1]);
+         if (!scriptPath.empty()) remove(scriptPath.c_str());
          return false;
     }
-    
+
     if (pid == 0) {
         // Child
-        close(pipefd[0]); // Close read end
+        close(pipefd[0]);
 
-        // Set environment
+        // Set environment variables
         for (const auto& pair : env) {
             setenv(pair.first.c_str(), pair.second.c_str(), 1);
         }
-        
-        // Change work dir
-        std::string effectiveWorkDir = profile.GetWorkingDirectory();
-        if (!effectiveWorkDir.empty()) {
-            if (chdir(effectiveWorkDir.c_str()) != 0) {
-                int err = errno;
-                write(pipefd[1], &err, sizeof(err));
-                _exit(1);
-            }
-        }
-        
+
         TerminalType type = profile.terminalType;
         if (type == TerminalType::Auto) {
             type = AutoDetectTerminal();
         }
-        
-        switch (type) {
-            case TerminalType::GnomeTerminal:
-                execlp("gnome-terminal", "gnome-terminal", "--", nullptr);
-                break;
-            case TerminalType::Konsole:
-                execlp("konsole", "konsole", nullptr);
-                break;
-            case TerminalType::Xterm:
-            default:
-                execlp("xterm", "xterm", nullptr);
-                break;
+
+        if (!scriptPath.empty()) {
+            switch (type) {
+                case TerminalType::GnomeTerminal:
+                    execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
+                case TerminalType::Konsole:
+                    execlp("konsole", "konsole", "-e", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
+                case TerminalType::Xterm:
+                default:
+                    execlp("xterm", "xterm", "-e", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
+            }
+        } else {
+            switch (type) {
+                case TerminalType::GnomeTerminal:
+                    execlp("gnome-terminal", "gnome-terminal", "--", nullptr);
+                    break;
+                case TerminalType::Konsole:
+                    execlp("konsole", "konsole", nullptr);
+                    break;
+                case TerminalType::Xterm:
+                default:
+                    execlp("xterm", "xterm", nullptr);
+                    break;
+            }
         }
-        
+
         // If we get here, exec failed
         int err = errno;
         write(pipefd[1], &err, sizeof(err));
         _exit(1);
     }
-    
+
     // Parent
-    close(pipefd[1]); // Close write end
-    
+    close(pipefd[1]);
+
     int childErr = 0;
     ssize_t count = read(pipefd[0], &childErr, sizeof(childErr));
     close(pipefd[0]);
-    
+
     if (count > 0) {
-        // Child wrote error code (exec or chdir failed)
         if (errorMsg) *errorMsg = strerror(childErr);
-        waitpid(pid, nullptr, 0); // Cleanup zombie
+        waitpid(pid, nullptr, 0);
+        if (!scriptPath.empty()) remove(scriptPath.c_str());
         return false;
     }
-    
-    // If count == 0, write end was closed (exec succeeded)
+
     return true;
 }
 #endif
@@ -518,6 +586,13 @@ bool TerminalLauncher::LaunchMacOS(
             escapedValue.replace(pos, 1, "'\"'\"'");
         }
         scriptFile << "export " << escapedName << "='" << escapedValue << "'\n";
+    }
+
+    // Execute startup commands
+    for (const auto& cmd : profile.startupCommands) {
+        if (!cmd.empty()) {
+            scriptFile << cmd << "\n";
+        }
     }
 
     // Remove the script itself and clear screen

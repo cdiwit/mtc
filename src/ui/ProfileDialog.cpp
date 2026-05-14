@@ -4,6 +4,7 @@
 #include "utils/PathUtils.h"
 #include <wx/dirdlg.h>
 #include <wx/statline.h>
+#include <wx/tokenzr.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -23,7 +24,7 @@ wxBEGIN_EVENT_TABLE(ProfileDialog, wxDialog)
 wxEND_EVENT_TABLE()
 
 ProfileDialog::ProfileDialog(wxWindow* parent, const wxString& title)
-    : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(550, 550),
+    : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(560, 520),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_isEdit(false)
 {
@@ -32,7 +33,7 @@ ProfileDialog::ProfileDialog(wxWindow* parent, const wxString& title)
 }
 
 ProfileDialog::ProfileDialog(wxWindow* parent, const wxString& title, const Profile& profile)
-    : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(550, 550),
+    : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(560, 520),
                wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
     , m_originalProfile(profile)
     , m_isEdit(true)
@@ -46,59 +47,65 @@ void ProfileDialog::CreateControls() {
     wxPanel* panel = new wxPanel(this);
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 基本信息区域
+    // Notebook (选项卡)
+    m_notebook = new wxNotebook(panel, wxID_ANY);
+
+    // ===== 选项卡 1: 基本信息 =====
+    wxPanel* basicTab = new wxPanel(m_notebook);
+    wxBoxSizer* basicSizer = new wxBoxSizer(wxVERTICAL);
+
     wxFlexGridSizer* formSizer = new wxFlexGridSizer(7, 2, 8, 15);
     formSizer->AddGrowableCol(1, 1);
 
     // 名称
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("配置名称:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("配置名称:")),
                    0, wxALIGN_CENTER_VERTICAL);
-    m_txtName = new wxTextCtrl(panel, ID_PROFILE_NAME);
+    m_txtName = new wxTextCtrl(basicTab, ID_PROFILE_NAME);
     formSizer->Add(m_txtName, 1, wxEXPAND);
 
     // 描述
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("描述:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("描述:")),
                    0, wxALIGN_CENTER_VERTICAL);
-    m_txtDescription = new wxTextCtrl(panel, ID_PROFILE_DESC);
+    m_txtDescription = new wxTextCtrl(basicTab, ID_PROFILE_DESC);
     formSizer->Add(m_txtDescription, 1, wxEXPAND);
 
     // Windows 工作目录
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("Windows 工作目录:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("Windows 工作目录:")),
                    0, wxALIGN_CENTER_VERTICAL);
     wxBoxSizer* workDirSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_txtWorkingDir = new wxTextCtrl(panel, ID_PROFILE_WORKDIR);
-    m_btnBrowse = new wxButton(panel, ID_PROFILE_BROWSE, wxT("..."),
+    m_txtWorkingDir = new wxTextCtrl(basicTab, ID_PROFILE_WORKDIR);
+    m_btnBrowse = new wxButton(basicTab, ID_PROFILE_BROWSE, wxT("..."),
                                 wxDefaultPosition, wxSize(36, -1));
     workDirSizer->Add(m_txtWorkingDir, 1, wxEXPAND | wxRIGHT, 3);
     workDirSizer->Add(m_btnBrowse, 0);
     formSizer->Add(workDirSizer, 1, wxEXPAND);
 
     // Linux 工作目录
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("Linux 工作目录:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("Linux 工作目录:")),
                    0, wxALIGN_CENTER_VERTICAL);
     wxBoxSizer* linuxDirSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_txtLinuxWorkingDir = new wxTextCtrl(panel, ID_PROFILE_LINUX_WORKDIR);
-    m_btnBrowseLinux = new wxButton(panel, ID_PROFILE_BROWSE_LINUX, wxT("..."),
+    m_txtLinuxWorkingDir = new wxTextCtrl(basicTab, ID_PROFILE_LINUX_WORKDIR);
+    m_btnBrowseLinux = new wxButton(basicTab, ID_PROFILE_BROWSE_LINUX, wxT("..."),
                                      wxDefaultPosition, wxSize(36, -1));
     linuxDirSizer->Add(m_txtLinuxWorkingDir, 1, wxEXPAND | wxRIGHT, 3);
     linuxDirSizer->Add(m_btnBrowseLinux, 0);
     formSizer->Add(linuxDirSizer, 1, wxEXPAND);
 
     // macOS 工作目录
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("macOS 工作目录:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("macOS 工作目录:")),
                    0, wxALIGN_CENTER_VERTICAL);
     wxBoxSizer* macDirSizer = new wxBoxSizer(wxHORIZONTAL);
-    m_txtMacWorkingDir = new wxTextCtrl(panel, ID_PROFILE_MAC_WORKDIR);
-    m_btnBrowseMac = new wxButton(panel, ID_PROFILE_BROWSE_MAC, wxT("..."),
+    m_txtMacWorkingDir = new wxTextCtrl(basicTab, ID_PROFILE_MAC_WORKDIR);
+    m_btnBrowseMac = new wxButton(basicTab, ID_PROFILE_BROWSE_MAC, wxT("..."),
                                    wxDefaultPosition, wxSize(36, -1));
     macDirSizer->Add(m_txtMacWorkingDir, 1, wxEXPAND | wxRIGHT, 3);
     macDirSizer->Add(m_btnBrowseMac, 0);
     formSizer->Add(macDirSizer, 1, wxEXPAND);
 
     // 终端类型
-    formSizer->Add(new wxStaticText(panel, wxID_ANY, wxT("终端类型:")),
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("终端类型:")),
                    0, wxALIGN_CENTER_VERTICAL);
-    m_choiceTerminal = new wxChoice(panel, ID_PROFILE_TERMINAL);
+    m_choiceTerminal = new wxChoice(basicTab, ID_PROFILE_TERMINAL);
     auto terminals = TerminalLauncher::GetAvailableTerminals();
     for (const auto& type : terminals) {
         m_choiceTerminal->Append(
@@ -109,17 +116,32 @@ void ProfileDialog::CreateControls() {
     m_choiceTerminal->SetSelection(0);
     formSizer->Add(m_choiceTerminal, 0, wxEXPAND);
 
-    mainSizer->Add(formSizer, 0, wxEXPAND | wxALL, 15);
+    // 启动命令
+    formSizer->Add(new wxStaticText(basicTab, wxID_ANY, wxT("启动命令:")),
+                   0, wxALIGN_CENTER_VERTICAL);
+    m_txtStartupCommands = new wxTextCtrl(basicTab, wxID_ANY, wxEmptyString,
+                                           wxDefaultPosition, wxDefaultSize,
+                                           wxTE_MULTILINE);
+    m_txtStartupCommands->SetMinSize(wxSize(-1, 80));
+    formSizer->Add(m_txtStartupCommands, 1, wxEXPAND);
 
-    // 分隔线
-    mainSizer->Add(new wxStaticLine(panel), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
+    basicSizer->Add(formSizer, 1, wxEXPAND | wxALL, 10);
+    basicTab->SetSizer(basicSizer);
 
-    // 环境变量面板
-    m_envVarPanel = new EnvVarPanel(panel);
-    mainSizer->Add(m_envVarPanel, 1, wxEXPAND | wxALL, 15);
+    // ===== 选项卡 2: 环境变量 =====
+    wxPanel* envTab = new wxPanel(m_notebook);
+    wxBoxSizer* envSizer = new wxBoxSizer(wxVERTICAL);
 
-    // 分隔线
-    mainSizer->Add(new wxStaticLine(panel), 0, wxEXPAND | wxLEFT | wxRIGHT, 15);
+    m_envVarPanel = new EnvVarPanel(envTab);
+    envSizer->Add(m_envVarPanel, 1, wxEXPAND);
+
+    envTab->SetSizer(envSizer);
+
+    // 添加选项卡
+    m_notebook->AddPage(basicTab, wxT("基本信息"));
+    m_notebook->AddPage(envTab, wxT("环境变量"));
+
+    mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
 
     // 按钮区域
     wxBoxSizer* btnSizer = new wxBoxSizer(wxHORIZONTAL);
@@ -134,7 +156,7 @@ void ProfileDialog::CreateControls() {
     btnSizer->Add(btnCancel, 0, wxRIGHT, 10);
     btnSizer->Add(btnOK, 0);
 
-    mainSizer->Add(btnSizer, 0, wxEXPAND | wxALL, 15);
+    mainSizer->Add(btnSizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
     panel->SetSizer(mainSizer);
 
@@ -142,7 +164,7 @@ void ProfileDialog::CreateControls() {
     dialogSizer->Add(panel, 1, wxEXPAND);
     SetSizer(dialogSizer);
 
-    SetMinSize(wxSize(500, 520));
+    SetMinSize(wxSize(500, 480));
 }
 
 void ProfileDialog::InitializeFromProfile(const Profile& profile) {
@@ -165,6 +187,14 @@ void ProfileDialog::InitializeFromProfile(const Profile& profile) {
     
     // 设置环境变量
     m_envVarPanel->SetEnvVariables(profile.environmentVariables);
+
+    // 设置启动命令
+    wxString cmds;
+    for (size_t i = 0; i < profile.startupCommands.size(); i++) {
+        if (i > 0) cmds << wxT("\n");
+        cmds << wxString::FromUTF8(profile.startupCommands[i]);
+    }
+    m_txtStartupCommands->SetValue(cmds);
 }
 
 void ProfileDialog::OnBrowse(wxCommandEvent& event) {
@@ -208,6 +238,17 @@ Profile ProfileDialog::GetProfile() const {
     }
 
     profile.environmentVariables = m_envVarPanel->GetEnvVariables();
+
+    // 解析启动命令（每行一条）
+    profile.startupCommands.clear();
+    wxString cmds = m_txtStartupCommands->GetValue();
+    wxStringTokenizer tokenizer(cmds, wxT("\n"), wxTOKEN_STRTOK);
+    while (tokenizer.HasMoreTokens()) {
+        wxString token = tokenizer.GetNextToken().Trim().Trim(false);
+        if (!token.IsEmpty()) {
+            profile.startupCommands.push_back(token.ToStdString());
+        }
+    }
 
     return profile;
 }

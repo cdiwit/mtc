@@ -1,5 +1,6 @@
 #pragma once
 #include <wx/wx.h>
+#include <wx/notebook.h>
 #include "core/Types.h"
 
 class EnvVarPanel;
@@ -25,6 +26,8 @@ private:
     wxButton* m_btnBrowseMac;
     wxButton* m_btnOpenWorkDir;
     wxChoice* m_choiceTerminal;
+    wxTextCtrl* m_txtStartupCommands;
+    wxNotebook* m_notebook;
     EnvVarPanel* m_envVarPanel;
     
     // 原始配置

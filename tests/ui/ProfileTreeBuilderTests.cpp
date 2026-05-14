@@ -8,7 +8,7 @@
 #include <gtest/gtest.h>
 
 TEST(ProfileTreeBuilderTests, MatchesNameDescriptionAndDirectoryCaseInsensitively) {
-    Profile profile{"1", "Prod API", "Release config", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, "", ""};
+    Profile profile{"1", "Prod API", "Release config", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, {}, "", ""};
 
     EXPECT_TRUE(MatchesSearch(profile, "prod"));
     EXPECT_TRUE(MatchesSearch(profile, "release"));
@@ -22,9 +22,9 @@ TEST(ProfileTreeBuilderTests, SplitsWindowsAndUnixPathsIntoSegments) {
 }
 
 TEST(ProfileTreeBuilderTests, GroupsProfilesIntoDirectoryTreeAndUnassignedBucket) {
-    Profile a{"1", "Dev", "", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, "", ""};
-    Profile b{"2", "Prod", "", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, "", ""};
-    Profile c{"3", "NoDir", "", "", "", "", TerminalType::Cmd, {}, "", ""};
+    Profile a{"1", "Dev", "", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, {}, "", ""};
+    Profile b{"2", "Prod", "", "D:/Work/Proj/A", "", "", TerminalType::Cmd, {}, {}, "", ""};
+    Profile c{"3", "NoDir", "", "", "", "", TerminalType::Cmd, {}, {}, "", ""};
 
     std::vector<const Profile*> profiles{&a, &b, &c};
 
