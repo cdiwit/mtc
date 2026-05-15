@@ -115,9 +115,13 @@ void MainFrame::CreateControls() {
     rightSizer->Add(searchSizer, 0, wxEXPAND | wxBOTTOM, 10);
 
     // 列表视图
+    long listStyle = wxLC_REPORT | wxLC_SINGLE_SEL;
+#ifdef __WXOSX__
+    listStyle |= wxLC_HRULES | wxLC_VRULES;
+#endif
     m_listView = new wxListView(panel, ID_LIST_PROFILES,
                                 wxDefaultPosition, wxDefaultSize,
-                                wxLC_REPORT | wxLC_SINGLE_SEL | wxLC_HRULES | wxLC_VRULES);
+                                listStyle);
     m_listView->AppendColumn(wxT("名称"), wxLIST_FORMAT_LEFT, 180);
     m_listView->AppendColumn(wxT("描述"), wxLIST_FORMAT_LEFT, 220);
     m_listView->AppendColumn(wxT("工作目录"), wxLIST_FORMAT_LEFT, 280);
@@ -128,9 +132,11 @@ void MainFrame::CreateControls() {
     listFont.SetFaceName("PingFang SC");
     m_listView->SetFont(listFont);
 #endif
+#ifndef __WXMSW__
     auto* imgList = new wxImageList(1, 20);
     imgList->Add(wxBitmap(1, 24));
     m_listView->AssignImageList(imgList, wxIMAGE_LIST_SMALL);
+#endif
     m_listView->EnableAlternateRowColours();
     m_listView->SetAlternateRowColour(
         wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOW).ChangeLightness(93));
