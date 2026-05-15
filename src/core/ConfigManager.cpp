@@ -89,6 +89,19 @@ bool ConfigManager::LoadConfig() {
                         if (cmd.is_string()) {
                             std::string s = cmd.get<std::string>();
                             if (!s.empty()) {
+                                // 修复 macOS 自动纠正：em dash(U+2014) → --
+                                const std::string emDash = "\xe2\x80\x94";
+                                const std::string enDash = "\xe2\x80\x93";
+                                size_t pos = 0;
+                                while ((pos = s.find(emDash, pos)) != std::string::npos) {
+                                    s.replace(pos, emDash.size(), "--");
+                                    pos += 2;
+                                }
+                                pos = 0;
+                                while ((pos = s.find(enDash, pos)) != std::string::npos) {
+                                    s.replace(pos, enDash.size(), "--");
+                                    pos += 2;
+                                }
                                 profile.startupCommands.push_back(s);
                             }
                         }

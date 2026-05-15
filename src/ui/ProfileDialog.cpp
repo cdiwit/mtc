@@ -242,12 +242,21 @@ Profile ProfileDialog::GetProfile() const {
     // 解析启动命令（每行一条）
     profile.startupCommands.clear();
     wxString cmds = m_txtStartupCommands->GetValue();
-    wxStringTokenizer tokenizer(cmds, wxT("\n"), wxTOKEN_STRTOK);
-    while (tokenizer.HasMoreTokens()) {
-        wxString token = tokenizer.GetNextToken().Trim().Trim(false);
-        if (!token.IsEmpty()) {
-            profile.startupCommands.push_back(token.ToStdString());
+    // 统一换行符，按 \n 分割
+    cmds.Replace(wxT("\r\n"), wxT("\n"));
+    cmds.Replace(wxT("\r"), wxT("\n"));
+    size_t pos = 0;
+    while (pos < cmds.size()) {
+        size_t end = cmds.find('\n', pos);
+        if (end == wxString::npos) end = cmds.size();
+        wxString line = cmds.SubString(pos, end - 1).Trim().Trim(false);
+        // 修复 macOS 自动纠正：将 em dash(—) 和 en dash(–) 还原为双连字符(--)
+        line.Replace(wxT("—"), wxT("--"));
+        line.Replace(wxT("–"), wxT("--"));
+        if (!line.IsEmpty()) {
+            profile.startupCommands.push_back(line.ToStdString());
         }
+        pos = end + 1;
     }
 
     return profile;
