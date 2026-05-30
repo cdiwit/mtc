@@ -13,6 +13,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <cerrno>
+#include <ctime>
 #include <cstdio>
 #include <fstream>
 #include <memory>
