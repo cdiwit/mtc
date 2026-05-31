@@ -487,7 +487,7 @@ bool TerminalLauncher::LaunchLinux(
         // Remove the script itself and keep terminal open
         scriptFile << "rm -f '" << scriptPath << "'\n";
         scriptFile << "clear\n";
-        scriptFile << "exec bash\n";
+        scriptFile << "exec /bin/bash -l\n";
         scriptFile.close();
 
         chmod(scriptPath.c_str(), 0700);
@@ -562,28 +562,28 @@ bool TerminalLauncher::LaunchLinux(
                     break;
                 case TerminalType::GnomeTerminal:
                     execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
                 case TerminalType::Konsole:
                     execlp("konsole", "konsole", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
                 case TerminalType::Xfce4Terminal:
                     execlp("xfce4-terminal", "xfce4-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
                 case TerminalType::MateTerminal:
                     execlp("mate-terminal", "mate-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
                 case TerminalType::Alacritty:
                     execlp("alacritty", "alacritty", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
                 case TerminalType::Xterm:
                 default:
                     execlp("xterm", "xterm", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
                     break;
             }
         } else {
