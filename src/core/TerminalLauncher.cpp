@@ -457,8 +457,6 @@ bool TerminalLauncher::LaunchLinux(
             return false;
         }
 
-        // Simple init script: just set env vars and cd.
-        // exec /bin/bash -i at the end starts interactive bash which sources ~/.bashrc (nvm etc.)
         scriptFile << "#!/bin/bash\n";
 
         // Change directory
@@ -479,17 +477,29 @@ bool TerminalLauncher::LaunchLinux(
             scriptFile << "export " << var.name << "='" << escapedValue << "'\n";
         }
 
-        // Execute startup commands
-        for (const auto& cmd : profile.startupCommands) {
-            if (!cmd.empty()) {
-                scriptFile << cmd << "\n";
+        // If there are startup commands, write them to a separate temp file.
+        // They need to run AFTER the user's shell loads (nvm, PATH etc.),
+        // so we use $SHELL -i -c to get full environment first.
+        if (hasStartupCommands) {
+            std::string startupPath = "/tmp/mtc_startup_" + std::to_string(std::time(nullptr)) + ".sh";
+            std::ofstream startupFile(startupPath);
+            for (const auto& cmd : profile.startupCommands) {
+                if (!cmd.empty()) {
+                    startupFile << cmd << "\n";
+                }
             }
-        }
+            startupFile.close();
+            chmod(startupPath.c_str(), 0600);
 
-        // Remove the script itself, then start user's default interactive shell (zsh/bash)
-        // $SHELL gives the user's default shell, which sources the correct rc file
-        scriptFile << "rm -f '" << scriptPath << "'\n";
-        scriptFile << "exec \"$SHELL\"\n";
+            scriptFile << "rm -f '" << scriptPath << "'\n";
+            // Launch user's shell interactively (-i) so .zshrc/.bashrc loads first,
+            // then run startup commands, then start a clean interactive shell
+            scriptFile << "exec \"$SHELL\" -i -c \"source '" << startupPath
+                       << "'; rm -f '" << startupPath << "'; exec \\\"\\$SHELL\\\"\"\n";
+        } else {
+            scriptFile << "rm -f '" << scriptPath << "'\n";
+            scriptFile << "exec \"$SHELL\"\n";
+        }
         scriptFile.close();
 
         chmod(scriptPath.c_str(), 0700);
