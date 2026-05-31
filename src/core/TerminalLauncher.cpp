@@ -18,6 +18,7 @@
 #include <fstream>
 #include <memory>
 #include <array>
+#include <vector>
 extern char** environ;
 #endif
 
@@ -514,6 +515,12 @@ bool TerminalLauncher::LaunchLinux(
             setenv(var.name.c_str(), var.value.c_str(), 1);
         }
 
+        // Ensure PATH includes standard directories so execlp can find terminal emulators
+        const char* currentPath = getenv("PATH");
+        std::string safePath = currentPath ? currentPath : "";
+        safePath += ":/usr/bin:/usr/local/bin:/bin:/snap/bin";
+        setenv("PATH", safePath.c_str(), 1);
+
         TerminalType type = profile.terminalType;
         if (type == TerminalType::Auto) {
             type = AutoDetectTerminal();
@@ -572,20 +579,31 @@ bool TerminalLauncher::LaunchLinux(
         }
 
         // If we get here, exec failed
-        int err = errno;
-        write(pipefd[1], &err, sizeof(err));
+        std::string errDetail = "Failed to exec " +
+            TerminalTypeToString(type) + ": " + strerror(errno) +
+            " (PATH=" + (getenv("PATH") ? getenv("PATH") : "(null)") + ")";
+        // Write length + string through pipe
+        size_t len = errDetail.size();
+        write(pipefd[1], &len, sizeof(len));
+        write(pipefd[1], errDetail.c_str(), len);
         _exit(1);
     }
 
     // Parent
     close(pipefd[1]);
 
-    int childErr = 0;
-    ssize_t count = read(pipefd[0], &childErr, sizeof(childErr));
+    size_t errLen = 0;
+    ssize_t count = read(pipefd[0], &errLen, sizeof(errLen));
+    if (count > 0 && errLen > 0 && errLen < 4096) {
+        std::vector<char> buf(errLen + 1, '\0');
+        read(pipefd[0], buf.data(), errLen);
+        if (errorMsg) *errorMsg = std::string(buf.data());
+    } else if (count > 0) {
+        if (errorMsg) *errorMsg = "Unknown launch error";
+    }
     close(pipefd[0]);
 
     if (count > 0) {
-        if (errorMsg) *errorMsg = strerror(childErr);
         waitpid(pid, nullptr, 0);
         if (!scriptPath.empty()) remove(scriptPath.c_str());
         return false;
