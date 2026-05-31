@@ -457,7 +457,12 @@ bool TerminalLauncher::LaunchLinux(
             return false;
         }
 
-        scriptFile << "#!/bin/bash\n";
+        // This file acts as a bash rcfile (--rcfile)
+        // Source system and user bashrc first to get full environment (nvm, aliases, etc.)
+        scriptFile << "# MTC init script (bash rcfile)\n";
+        scriptFile << "[ -f /etc/bash.bashrc ] && source /etc/bash.bashrc\n";
+        scriptFile << "[ -f \"$HOME/.bashrc\" ] && source \"$HOME/.bashrc\"\n";
+        scriptFile << "\n";
 
         // Change directory
         if (!effectiveWorkDir.empty()) {
@@ -484,10 +489,9 @@ bool TerminalLauncher::LaunchLinux(
             }
         }
 
-        // Remove the script itself and keep terminal open
+        // Remove the script itself (bash reads rcfile into memory first)
         scriptFile << "rm -f '" << scriptPath << "'\n";
         scriptFile << "clear\n";
-        scriptFile << "exec /bin/bash -l\n";
         scriptFile.close();
 
         chmod(scriptPath.c_str(), 0700);
@@ -551,39 +555,37 @@ bool TerminalLauncher::LaunchLinux(
         if (!scriptPath.empty()) {
             switch (type) {
                 case TerminalType::ExoOpen:
-                    // exo-open: explicitly use bash to run the script
                     execlp("exo-open", "exo-open", "--launch", "TerminalEmulator",
-                           "/bin/bash", scriptPath.c_str(), nullptr);
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::QTerminal:
-                    // QTerminal: use bash to run the script
                     execlp("qterminal", "qterminal", "-e",
-                           "/bin/bash", scriptPath.c_str(), nullptr);
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::GnomeTerminal:
-                    execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("gnome-terminal", "gnome-terminal", "--",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::Konsole:
-                    execlp("konsole", "konsole", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("konsole", "konsole", "-e",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::Xfce4Terminal:
-                    execlp("xfce4-terminal", "xfce4-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("xfce4-terminal", "xfce4-terminal", "--",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::MateTerminal:
-                    execlp("mate-terminal", "mate-terminal", "--", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("mate-terminal", "mate-terminal", "--",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::Alacritty:
-                    execlp("alacritty", "alacritty", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("alacritty", "alacritty", "-e",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
                 case TerminalType::Xterm:
                 default:
-                    execlp("xterm", "xterm", "-e", "bash", "-c",
-                           ("source '" + scriptPath + "'; exec /bin/bash -l").c_str(), nullptr);
+                    execlp("xterm", "xterm", "-e",
+                           "/bin/bash", "--rcfile", scriptPath.c_str(), "-i", nullptr);
                     break;
             }
         } else {
