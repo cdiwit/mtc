@@ -104,6 +104,14 @@ if(MTC_BUILD_APP)
             add_custom_command(TARGET mtc POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_BUNDLE_CONTENT_DIR:mtc>/Resources/data
             )
+        elseif(UNIX)
+            # Linux: 复制数据目录和图标到输出目录
+            add_custom_command(TARGET mtc POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:mtc>/data
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${CMAKE_SOURCE_DIR}/resources/mtc.png
+                    $<TARGET_FILE_DIR:mtc>/mtc.png
+            )
         else()
             add_custom_command(TARGET mtc POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:mtc>/data

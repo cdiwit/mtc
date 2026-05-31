@@ -495,6 +495,20 @@ bool TerminalLauncher::LaunchLinux(
         return false;
     }
 
+    // Resolve terminal type BEFORE fork (in parent process)
+    // so system("which ...") works reliably
+    TerminalType type = profile.terminalType;
+    if (type == TerminalType::Auto) {
+        type = AutoDetectTerminal();
+    }
+    if (type == TerminalType::Auto) {
+        if (errorMsg) *errorMsg = "未找到支持的终端模拟器，请安装 gnome-terminal、konsole、xfce4-terminal、mate-terminal、alacritty 或 xterm";
+        close(pipefd[0]);
+        close(pipefd[1]);
+        if (!scriptPath.empty()) remove(scriptPath.c_str());
+        return false;
+    }
+
     pid_t pid = fork();
 
     if (pid == -1) {
@@ -520,11 +534,6 @@ bool TerminalLauncher::LaunchLinux(
         std::string safePath = currentPath ? currentPath : "";
         safePath += ":/usr/bin:/usr/local/bin:/bin:/snap/bin";
         setenv("PATH", safePath.c_str(), 1);
-
-        TerminalType type = profile.terminalType;
-        if (type == TerminalType::Auto) {
-            type = AutoDetectTerminal();
-        }
 
         if (!scriptPath.empty()) {
             switch (type) {

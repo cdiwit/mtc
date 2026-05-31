@@ -7,6 +7,8 @@
 #include <wx/statline.h>
 #include <wx/menu.h>
 #include <wx/choicdlg.h>
+#include <wx/filename.h>
+#include "utils/PathUtils.h"
 
 #include <algorithm>
 #include <utility>
@@ -43,6 +45,16 @@ MainFrame::MainFrame()
 
 #ifdef __WXMSW__
     SetIcon(wxIcon(wxT("APP_ICON"), wxBITMAP_TYPE_ICO_RESOURCE));
+#elif defined(__LINUX__)
+    // Load icon from PNG file next to executable
+    wxFileName iconPath(PathUtils::GetExecutableDir(), wxT("mtc.png"));
+    if (iconPath.FileExists()) {
+        wxIcon icon;
+        icon.CopyFromBitmap(wxBitmap(iconPath.GetFullPath(), wxBITMAP_TYPE_PNG));
+        if (icon.IsOk()) {
+            SetIcon(icon);
+        }
+    }
 #endif
 
     Centre();
