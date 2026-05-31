@@ -117,6 +117,8 @@ std::vector<TerminalType> TerminalLauncher::GetAvailableTerminals() {
     terminals.push_back(TerminalType::PowerShell);
     terminals.push_back(TerminalType::Cmd);
 #elif defined(__linux__)
+    terminals.push_back(TerminalType::ExoOpen);
+    terminals.push_back(TerminalType::QTerminal);
     terminals.push_back(TerminalType::GnomeTerminal);
     terminals.push_back(TerminalType::Konsole);
     terminals.push_back(TerminalType::Xfce4Terminal);
@@ -150,6 +152,10 @@ bool TerminalLauncher::IsTerminalAvailable(TerminalType type) {
     }
 #elif defined(__linux__)
     switch (type) {
+        case TerminalType::ExoOpen:
+            return system("which exo-open > /dev/null 2>&1") == 0;
+        case TerminalType::QTerminal:
+            return system("which qterminal > /dev/null 2>&1") == 0;
         case TerminalType::GnomeTerminal:
             return system("which gnome-terminal > /dev/null 2>&1") == 0;
         case TerminalType::Konsole:
@@ -181,7 +187,13 @@ TerminalType TerminalLauncher::AutoDetectTerminal() {
     return TerminalType::Cmd;
     
 #elif defined(__linux__)
-    // 按优先级检测
+    // 按优先级检测（exo-open 优先，XFCE 标准方式）
+    if (IsTerminalAvailable(TerminalType::ExoOpen)) {
+        return TerminalType::ExoOpen;
+    }
+    if (IsTerminalAvailable(TerminalType::QTerminal)) {
+        return TerminalType::QTerminal;
+    }
     if (IsTerminalAvailable(TerminalType::GnomeTerminal)) {
         return TerminalType::GnomeTerminal;
     }
@@ -472,9 +484,10 @@ bool TerminalLauncher::LaunchLinux(
             }
         }
 
-        // Remove the script itself
+        // Remove the script itself and keep terminal open
         scriptFile << "rm -f '" << scriptPath << "'\n";
         scriptFile << "clear\n";
+        scriptFile << "exec bash\n";
         scriptFile.close();
 
         chmod(scriptPath.c_str(), 0700);
@@ -502,7 +515,7 @@ bool TerminalLauncher::LaunchLinux(
         type = AutoDetectTerminal();
     }
     if (type == TerminalType::Auto) {
-        if (errorMsg) *errorMsg = "未找到支持的终端模拟器，请安装 gnome-terminal、konsole、xfce4-terminal、mate-terminal、alacritty 或 xterm";
+        if (errorMsg) *errorMsg = "未找到支持的终端模拟器，请安装 exo-open、qterminal、gnome-terminal、konsole、xfce4-terminal、mate-terminal、alacritty 或 xterm";
         close(pipefd[0]);
         close(pipefd[1]);
         if (!scriptPath.empty()) remove(scriptPath.c_str());
@@ -537,6 +550,15 @@ bool TerminalLauncher::LaunchLinux(
 
         if (!scriptPath.empty()) {
             switch (type) {
+                case TerminalType::ExoOpen:
+                    // exo-open: XFCE standard way, script already has "exec bash" at end
+                    execlp("exo-open", "exo-open", "--launch", "TerminalEmulator",
+                           scriptPath.c_str(), nullptr);
+                    break;
+                case TerminalType::QTerminal:
+                    // QTerminal: -e with script path (avoids argument parsing issues)
+                    execlp("qterminal", "qterminal", "-e", scriptPath.c_str(), nullptr);
+                    break;
                 case TerminalType::GnomeTerminal:
                     execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
                            ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
@@ -565,6 +587,12 @@ bool TerminalLauncher::LaunchLinux(
             }
         } else {
             switch (type) {
+                case TerminalType::ExoOpen:
+                    execlp("exo-open", "exo-open", "--launch", "TerminalEmulator", nullptr);
+                    break;
+                case TerminalType::QTerminal:
+                    execlp("qterminal", "qterminal", nullptr);
+                    break;
                 case TerminalType::GnomeTerminal:
                     execlp("gnome-terminal", "gnome-terminal", "--", nullptr);
                     break;

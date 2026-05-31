@@ -16,6 +16,8 @@ enum class TerminalType {
     PowerShell,
     Cmd,
     // Linux
+    ExoOpen,
+    QTerminal,
     GnomeTerminal,
     Konsole,
     Xfce4Terminal,
@@ -73,6 +75,8 @@ inline std::string TerminalTypeToString(TerminalType type) {
         case TerminalType::WindowsTerminal: return "wt";
         case TerminalType::PowerShell: return "powershell";
         case TerminalType::Cmd: return "cmd";
+        case TerminalType::ExoOpen: return "exo-open";
+        case TerminalType::QTerminal: return "qterminal";
         case TerminalType::GnomeTerminal: return "gnome-terminal";
         case TerminalType::Konsole: return "konsole";
         case TerminalType::Xfce4Terminal: return "xfce4-terminal";
@@ -89,6 +93,8 @@ inline TerminalType StringToTerminalType(const std::string& str) {
     if (str == "wt") return TerminalType::WindowsTerminal;
     if (str == "powershell") return TerminalType::PowerShell;
     if (str == "cmd") return TerminalType::Cmd;
+    if (str == "exo-open") return TerminalType::ExoOpen;
+    if (str == "qterminal") return TerminalType::QTerminal;
     if (str == "gnome-terminal") return TerminalType::GnomeTerminal;
     if (str == "konsole") return TerminalType::Konsole;
     if (str == "xfce4-terminal") return TerminalType::Xfce4Terminal;
@@ -106,6 +112,8 @@ inline std::string TerminalTypeDisplayName(TerminalType type) {
         case TerminalType::WindowsTerminal: return "Windows Terminal";
         case TerminalType::PowerShell: return "PowerShell";
         case TerminalType::Cmd: return "CMD";
+        case TerminalType::ExoOpen: return "XFCE 默认终端";
+        case TerminalType::QTerminal: return "QTerminal";
         case TerminalType::GnomeTerminal: return "GNOME Terminal";
         case TerminalType::Konsole: return "Konsole";
         case TerminalType::Xfce4Terminal: return "Xfce Terminal";
