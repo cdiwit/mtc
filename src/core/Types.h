@@ -18,6 +18,9 @@ enum class TerminalType {
     // Linux
     GnomeTerminal,
     Konsole,
+    Xfce4Terminal,
+    MateTerminal,
+    Alacritty,
     Xterm,
     // macOS
     TerminalApp,
@@ -72,6 +75,9 @@ inline std::string TerminalTypeToString(TerminalType type) {
         case TerminalType::Cmd: return "cmd";
         case TerminalType::GnomeTerminal: return "gnome-terminal";
         case TerminalType::Konsole: return "konsole";
+        case TerminalType::Xfce4Terminal: return "xfce4-terminal";
+        case TerminalType::MateTerminal: return "mate-terminal";
+        case TerminalType::Alacritty: return "alacritty";
         case TerminalType::Xterm: return "xterm";
         case TerminalType::TerminalApp: return "terminal.app";
         case TerminalType::ITerm2: return "iterm2";
@@ -85,6 +91,9 @@ inline TerminalType StringToTerminalType(const std::string& str) {
     if (str == "cmd") return TerminalType::Cmd;
     if (str == "gnome-terminal") return TerminalType::GnomeTerminal;
     if (str == "konsole") return TerminalType::Konsole;
+    if (str == "xfce4-terminal") return TerminalType::Xfce4Terminal;
+    if (str == "mate-terminal") return TerminalType::MateTerminal;
+    if (str == "alacritty") return TerminalType::Alacritty;
     if (str == "xterm") return TerminalType::Xterm;
     if (str == "terminal.app") return TerminalType::TerminalApp;
     if (str == "iterm2") return TerminalType::ITerm2;
@@ -99,6 +108,9 @@ inline std::string TerminalTypeDisplayName(TerminalType type) {
         case TerminalType::Cmd: return "CMD";
         case TerminalType::GnomeTerminal: return "GNOME Terminal";
         case TerminalType::Konsole: return "Konsole";
+        case TerminalType::Xfce4Terminal: return "Xfce Terminal";
+        case TerminalType::MateTerminal: return "MATE Terminal";
+        case TerminalType::Alacritty: return "Alacritty";
         case TerminalType::Xterm: return "XTerm";
         case TerminalType::TerminalApp: return "Terminal.app";
         case TerminalType::ITerm2: return "iTerm2";

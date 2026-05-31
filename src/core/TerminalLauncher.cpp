@@ -118,6 +118,9 @@ std::vector<TerminalType> TerminalLauncher::GetAvailableTerminals() {
 #elif defined(__linux__)
     terminals.push_back(TerminalType::GnomeTerminal);
     terminals.push_back(TerminalType::Konsole);
+    terminals.push_back(TerminalType::Xfce4Terminal);
+    terminals.push_back(TerminalType::MateTerminal);
+    terminals.push_back(TerminalType::Alacritty);
     terminals.push_back(TerminalType::Xterm);
 #elif defined(__APPLE__)
     terminals.push_back(TerminalType::TerminalApp);
@@ -150,6 +153,12 @@ bool TerminalLauncher::IsTerminalAvailable(TerminalType type) {
             return system("which gnome-terminal > /dev/null 2>&1") == 0;
         case TerminalType::Konsole:
             return system("which konsole > /dev/null 2>&1") == 0;
+        case TerminalType::Xfce4Terminal:
+            return system("which xfce4-terminal > /dev/null 2>&1") == 0;
+        case TerminalType::MateTerminal:
+            return system("which mate-terminal > /dev/null 2>&1") == 0;
+        case TerminalType::Alacritty:
+            return system("which alacritty > /dev/null 2>&1") == 0;
         case TerminalType::Xterm:
             return system("which xterm > /dev/null 2>&1") == 0;
         default:
@@ -178,7 +187,19 @@ TerminalType TerminalLauncher::AutoDetectTerminal() {
     if (IsTerminalAvailable(TerminalType::Konsole)) {
         return TerminalType::Konsole;
     }
-    return TerminalType::Xterm;
+    if (IsTerminalAvailable(TerminalType::Xfce4Terminal)) {
+        return TerminalType::Xfce4Terminal;
+    }
+    if (IsTerminalAvailable(TerminalType::MateTerminal)) {
+        return TerminalType::MateTerminal;
+    }
+    if (IsTerminalAvailable(TerminalType::Alacritty)) {
+        return TerminalType::Alacritty;
+    }
+    if (IsTerminalAvailable(TerminalType::Xterm)) {
+        return TerminalType::Xterm;
+    }
+    return TerminalType::Auto;  // 没有找到任何可用终端
     
 #elif defined(__APPLE__)
     return TerminalType::TerminalApp;
@@ -507,6 +528,18 @@ bool TerminalLauncher::LaunchLinux(
                     execlp("konsole", "konsole", "-e", "bash", "-c",
                            ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
                     break;
+                case TerminalType::Xfce4Terminal:
+                    execlp("xfce4-terminal", "xfce4-terminal", "-x", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
+                case TerminalType::MateTerminal:
+                    execlp("mate-terminal", "mate-terminal", "--", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
+                case TerminalType::Alacritty:
+                    execlp("alacritty", "alacritty", "-e", "bash", "-c",
+                           ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
+                    break;
                 case TerminalType::Xterm:
                 default:
                     execlp("xterm", "xterm", "-e", "bash", "-c",
@@ -520,6 +553,15 @@ bool TerminalLauncher::LaunchLinux(
                     break;
                 case TerminalType::Konsole:
                     execlp("konsole", "konsole", nullptr);
+                    break;
+                case TerminalType::Xfce4Terminal:
+                    execlp("xfce4-terminal", "xfce4-terminal", nullptr);
+                    break;
+                case TerminalType::MateTerminal:
+                    execlp("mate-terminal", "mate-terminal", nullptr);
+                    break;
+                case TerminalType::Alacritty:
+                    execlp("alacritty", "alacritty", nullptr);
                     break;
                 case TerminalType::Xterm:
                 default:
