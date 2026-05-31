@@ -551,13 +551,14 @@ bool TerminalLauncher::LaunchLinux(
         if (!scriptPath.empty()) {
             switch (type) {
                 case TerminalType::ExoOpen:
-                    // exo-open: XFCE standard way, script already has "exec bash" at end
+                    // exo-open: explicitly use bash to run the script
                     execlp("exo-open", "exo-open", "--launch", "TerminalEmulator",
-                           scriptPath.c_str(), nullptr);
+                           "/bin/bash", scriptPath.c_str(), nullptr);
                     break;
                 case TerminalType::QTerminal:
-                    // QTerminal: -e with script path (avoids argument parsing issues)
-                    execlp("qterminal", "qterminal", "-e", scriptPath.c_str(), nullptr);
+                    // QTerminal: use bash to run the script
+                    execlp("qterminal", "qterminal", "-e",
+                           "/bin/bash", scriptPath.c_str(), nullptr);
                     break;
                 case TerminalType::GnomeTerminal:
                     execlp("gnome-terminal", "gnome-terminal", "--", "bash", "-c",
