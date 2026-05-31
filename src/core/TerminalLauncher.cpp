@@ -621,8 +621,8 @@ bool TerminalLauncher::LaunchLinux(
             " (PATH=" + (getenv("PATH") ? getenv("PATH") : "(null)") + ")";
         // Write length + string through pipe
         size_t len = errDetail.size();
-        write(pipefd[1], &len, sizeof(len));
-        write(pipefd[1], errDetail.c_str(), len);
+        (void)write(pipefd[1], &len, sizeof(len));
+        (void)write(pipefd[1], errDetail.c_str(), len);
         _exit(1);
     }
 
@@ -633,7 +633,7 @@ bool TerminalLauncher::LaunchLinux(
     ssize_t count = read(pipefd[0], &errLen, sizeof(errLen));
     if (count > 0 && errLen > 0 && errLen < 4096) {
         std::vector<char> buf(errLen + 1, '\0');
-        read(pipefd[0], buf.data(), errLen);
+        (void)read(pipefd[0], buf.data(), errLen);
         if (errorMsg) *errorMsg = std::string(buf.data());
     } else if (count > 0) {
         if (errorMsg) *errorMsg = "Unknown launch error";
