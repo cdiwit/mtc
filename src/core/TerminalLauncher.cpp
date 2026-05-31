@@ -486,9 +486,10 @@ bool TerminalLauncher::LaunchLinux(
             }
         }
 
-        // Remove the script itself, then start interactive bash (sources ~/.bashrc → nvm etc.)
+        // Remove the script itself, then start user's default interactive shell (zsh/bash)
+        // $SHELL gives the user's default shell, which sources the correct rc file
         scriptFile << "rm -f '" << scriptPath << "'\n";
-        scriptFile << "exec /bin/bash -i\n";
+        scriptFile << "exec \"$SHELL\"\n";
         scriptFile.close();
 
         chmod(scriptPath.c_str(), 0700);
