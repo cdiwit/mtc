@@ -508,9 +508,10 @@ bool TerminalLauncher::LaunchLinux(
         // Child
         close(pipefd[0]);
 
-        // Set environment variables
-        for (const auto& pair : env) {
-            setenv(pair.first.c_str(), pair.second.c_str(), 1);
+        // Set only custom environment variables (system vars are inherited via fork)
+        // Setting all vars could override PATH and break execlp
+        for (const auto& var : profile.environmentVariables) {
+            setenv(var.name.c_str(), var.value.c_str(), 1);
         }
 
         TerminalType type = profile.terminalType;
@@ -529,7 +530,7 @@ bool TerminalLauncher::LaunchLinux(
                            ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
                     break;
                 case TerminalType::Xfce4Terminal:
-                    execlp("xfce4-terminal", "xfce4-terminal", "-x", "bash", "-c",
+                    execlp("xfce4-terminal", "xfce4-terminal", "--", "bash", "-c",
                            ("source '" + scriptPath + "'; exec bash").c_str(), nullptr);
                     break;
                 case TerminalType::MateTerminal:
