@@ -26,6 +26,8 @@
     <string>10.13</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>MTC 需要访问本地网络以连接你配置的 SSH 主机（如路由器/NAS/内网服务器）。</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2024 MTC. All rights reserved.</string>
 </dict>

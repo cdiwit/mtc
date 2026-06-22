@@ -27,16 +27,56 @@ if(MTC_BUILD_APP)
         # 查找 nlohmann_json
         find_package(nlohmann_json 3.2.0 REQUIRED)
 
+        # ---- libssh2（远程 SFTP 文件浏览/下载）----
+        find_package(PkgConfig QUIET)
+        if(PkgConfig_FOUND)
+            pkg_check_modules(LIBSSH2 QUIET IMPORTED_TARGET libssh2)
+        endif()
+        if(NOT LIBSSH2_FOUND AND NOT TARGET PkgConfig::LIBSSH2)
+            find_path(LIBSSH2_INCLUDE_DIR NAMES libssh2.h)
+            find_library(LIBSSH2_LIBRARY NAMES ssh2 libssh2)
+            if(LIBSSH2_INCLUDE_DIR AND LIBSSH2_LIBRARY)
+                set(LIBSSH2_FOUND TRUE)
+            endif()
+        endif()
+        if(NOT LIBSSH2_FOUND AND NOT TARGET PkgConfig::LIBSSH2)
+            message(FATAL_ERROR "libssh2 未找到。请安装：macOS `brew install libssh2` / Linux `apt install libssh2-1-dev` / Windows vcpkg `libssh2`")
+        endif()
+
+        # ---- libsecret（Linux 钥匙串；macOS/Windows 用系统框架）----
+        if(UNIX AND NOT APPLE)
+            if(PkgConfig_FOUND)
+                pkg_check_modules(LIBSECRET QUIET IMPORTED_TARGET libsecret-1)
+            endif()
+            if(NOT LIBSECRET_FOUND AND NOT TARGET PkgConfig::LIBSECRET)
+                find_path(LIBSECRET_INCLUDE_DIR NAMES libsecret/secret.h)
+                find_library(LIBSECRET_LIBRARY NAMES secret-1 libsecret-1)
+                if(LIBSECRET_INCLUDE_DIR AND LIBSECRET_LIBRARY)
+                    set(LIBSECRET_FOUND TRUE)
+                endif()
+            endif()
+            if(NOT LIBSECRET_FOUND AND NOT TARGET PkgConfig::LIBSECRET)
+                message(WARNING "libsecret 未找到，Linux 上凭据将无法保存到钥匙串。请 `apt install libsecret-1-dev`")
+            endif()
+        endif()
+
         # 源文件
         set(SOURCES
             src/main.cpp
             src/core/ConfigManager.cpp
             src/core/SearchHistory.cpp
             src/core/TerminalLauncher.cpp
+            src/core/SecretStore.cpp
+            src/core/SshClient.cpp
             src/ui/MainFrame.cpp
             src/ui/ProfileDialog.cpp
             src/ui/EnvVarPanel.cpp
             src/ui/ProfileTreeBuilder.cpp
+            src/ui/SshHostDialog.cpp
+            src/ui/SshHostManagerDialog.cpp
+            src/ui/CredentialDialog.cpp
+            src/ui/CredentialManagerDialog.cpp
+            src/ui/RemoteFileBrowserDialog.cpp
             src/utils/PathUtils.cpp
         )
 
@@ -69,9 +109,35 @@ if(MTC_BUILD_APP)
             nlohmann_json::nlohmann_json
         )
 
-        # Windows 特定链接
+        # libssh2 链接
+        if(TARGET PkgConfig::LIBSSH2)
+            target_link_libraries(mtc PRIVATE PkgConfig::LIBSSH2)
+        else()
+            target_include_directories(mtc PRIVATE ${LIBSSH2_INCLUDE_DIR})
+            target_link_libraries(mtc PRIVATE ${LIBSSH2_LIBRARY})
+        endif()
+
+        # libsecret 链接（Linux）
+        if(UNIX AND NOT APPLE)
+            if(TARGET PkgConfig::LIBSECRET)
+                target_link_libraries(mtc PRIVATE PkgConfig::LIBSECRET)
+            elseif(LIBSECRET_FOUND)
+                target_include_directories(mtc PRIVATE ${LIBSECRET_INCLUDE_DIR})
+                target_link_libraries(mtc PRIVATE ${LIBSECRET_LIBRARY})
+            endif()
+        endif()
+
+        # macOS 钥匙串框架（Security / CoreFoundation）
+        if(APPLE)
+            find_library(SECRET_SECURITY_FRAMEWORK Security REQUIRED)
+            find_library(SECRET_CFFRAMEWORK CoreFoundation REQUIRED)
+            target_link_libraries(mtc PRIVATE
+                ${SECRET_SECURITY_FRAMEWORK} ${SECRET_CFFRAMEWORK})
+        endif()
+
+        # Windows 特定链接（凭据管理器 + Winsock + shell）
         if(WIN32)
-            target_link_libraries(mtc PRIVATE shlwapi shell32)
+            target_link_libraries(mtc PRIVATE shlwapi shell32 advapi32 ws2_32)
             set_target_properties(mtc PROPERTIES WIN32_EXECUTABLE TRUE)
         endif()
 

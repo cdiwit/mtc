@@ -9,6 +9,9 @@
 - 支持 Windows Terminal、PowerShell、CMD 等多种终端
 - 支持 Windows、Linux、macOS 跨平台运行
 - 配置持久化存储
+- **远程 SSH**：管理 SSH 主机与凭据，配置可选 SSH 主机+凭据（二者皆空=本地终端），
+  远程配置点"打开目录"可浏览远端文件（SFTP），双击文件下载并以本地默认程序打开
+- 凭据（密码 / 私钥口令）保存在**系统钥匙串**（macOS Keychain / Windows 凭据管理器 / Linux libsecret），不落明文磁盘
 
 ## 截图
 
@@ -40,12 +43,14 @@
 - C++17 编译器
 - wxWidgets 3.2+
 - nlohmann/json
+- libssh2（远程 SFTP 文件浏览）
+- libsecret（仅 Linux；macOS/Windows 用系统钥匙串框架）
 
 ### Windows (使用 vcpkg)
 
 ```powershell
 # 安装依赖
-vcpkg install wxwidgets:x64-windows-static nlohmann-json:x64-windows-static
+vcpkg install wxwidgets:x64-windows-static nlohmann-json:x64-windows-static libssh2:x64-windows-static
 
 # 构建
 mkdir build && cd build
@@ -56,7 +61,7 @@ cmake --build . --config Release
 ### Linux
 
 ```bash
-sudo apt-get install libwxgtk3.0-gtk3-dev nlohmann-json3-dev
+sudo apt-get install libwxgtk3.0-gtk3-dev nlohmann-json3-dev libssh2-1-dev libsecret-1-dev
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
@@ -65,7 +70,7 @@ make -j$(nproc)
 ### macOS
 
 ```bash
-brew install wxwidgets nlohmann-json
+brew install wxwidgets nlohmann-json libssh2
 mkdir build && cd build
 cmake ..
 make -j$(sysctl -n hw.ncpu)

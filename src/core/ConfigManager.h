@@ -31,7 +31,22 @@ public:
     void UpdateProfile(const std::string& id, const Profile& profile);
     void DeleteProfile(const std::string& id);
     Profile DuplicateProfile(const std::string& id);
-    
+
+    // SSH 主机操作
+    const std::vector<SshHost>& GetSshHosts() const { return m_config.sshHosts; }
+    const SshHost* GetSshHost(const std::string& id) const;
+    void AddSshHost(const SshHost& host);
+    void UpdateSshHost(const std::string& id, const SshHost& host);
+    void DeleteSshHost(const std::string& id);
+
+    // 凭据操作（注意：真正的密码/口令存系统钥匙串，不在配置里）
+    const std::vector<Credential>& GetCredentials() const { return m_config.credentials; }
+    const Credential* GetCredential(const std::string& id) const;
+    // 返回已存入的凭据（含新生成的 id），调用方据此把秘密写入钥匙串
+    Credential AddCredential(const Credential& cred);
+    void UpdateCredential(const std::string& id, const Credential& cred);
+    void DeleteCredential(const std::string& id);
+
     // 导入导出
     bool ExportConfig(const fs::path& filePath);
     bool ImportConfig(const fs::path& filePath);

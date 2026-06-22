@@ -29,6 +29,34 @@ enum class TerminalType {
     ITerm2
 };
 
+// SSH 主机（"连哪台机器、以谁身份"）
+struct SshHost {
+    std::string id;
+    std::string name;
+    std::string host;
+    int port = 22;
+    std::string username;          // 登录用户名
+    std::string createdAt;
+    std::string updatedAt;
+};
+
+// 凭据认证方式
+enum class CredentialType {
+    Password,     // 用户名 + 密码（密码存系统钥匙串）
+    PrivateKey,   // 私钥文件 + 可选口令（口令存系统钥匙串）
+    SshAgent      // 复用本地 ssh-agent，不在 App 内存任何秘密
+};
+
+// 凭据（"用什么秘密登录"，仅承载元数据；真正的密码/口令存钥匙串）
+struct Credential {
+    std::string id;
+    std::string name;
+    CredentialType type = CredentialType::Password;
+    std::string keyPath;           // 仅 PrivateKey：私钥文件路径
+    std::string createdAt;
+    std::string updatedAt;
+};
+
 // 配置项结构
 struct Profile {
     std::string id;
@@ -43,7 +71,15 @@ struct Profile {
     std::string createdAt;
     std::string updatedAt;
 
+    // 远程 SSH（二者皆空 = 本地终端，行为与改动前一致）
+    std::string sshHostId;                 // 空 = 本地终端
+    std::string credentialId;              // 空 = 不带凭据（依赖 Agent / 默认密钥）
+    std::string remoteWorkingDirectory;    // 远程初始目录（文件浏览器 & ssh cd 起点）
+
     std::string GetWorkingDirectory() const;
+
+    // 是否为远程配置
+    bool IsRemote() const { return !sshHostId.empty(); }
 };
 
 struct ProfileTreeNode {
@@ -66,6 +102,8 @@ struct AppSettings {
 struct AppConfig {
     std::string version = "1.0";
     std::vector<Profile> profiles;
+    std::vector<SshHost> sshHosts;
+    std::vector<Credential> credentials;
     AppSettings settings;
 };
 
@@ -141,4 +179,29 @@ inline std::string Profile::GetWorkingDirectory() const {
     if (!linuxWorkingDirectory.empty()) return linuxWorkingDirectory;
 #endif
     return "";
+}
+
+// 凭据类型转换工具
+inline std::string CredentialTypeToString(CredentialType type) {
+    switch (type) {
+        case CredentialType::Password:   return "password";
+        case CredentialType::PrivateKey: return "privateKey";
+        case CredentialType::SshAgent:   return "sshAgent";
+        default: return "password";
+    }
+}
+
+inline CredentialType StringToCredentialType(const std::string& str) {
+    if (str == "privateKey") return CredentialType::PrivateKey;
+    if (str == "sshAgent")   return CredentialType::SshAgent;
+    return CredentialType::Password;
+}
+
+inline std::string CredentialTypeDisplayName(CredentialType type) {
+    switch (type) {
+        case CredentialType::Password:   return "密码";
+        case CredentialType::PrivateKey: return "私钥";
+        case CredentialType::SshAgent:   return "SSH Agent";
+        default: return "密码";
+    }
 }

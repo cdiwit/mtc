@@ -3,6 +3,7 @@
 #include "ui/MainFrame.h"
 #include "core/ConfigManager.h"
 #include "utils/PathUtils.h"
+#include <libssh2.h>
 
 #ifdef __WXMSW__
 #include <windows.h>
@@ -11,6 +12,9 @@
 class MTCApp : public wxApp {
 public:
     bool OnInit() override {
+        // libssh2 全局初始化（与 OnExit 的 libssh2_exit 配对）
+        libssh2_init(0);
+
         wxLocale* locale = new wxLocale();
         locale->Init(wxLANGUAGE_DEFAULT);
 
@@ -45,6 +49,7 @@ public:
     int OnExit() override {
         delete m_instanceChecker;
         ConfigManager::GetInstance().SaveConfig();
+        libssh2_exit();
         return wxApp::OnExit();
     }
 

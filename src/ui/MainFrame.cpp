@@ -1,5 +1,8 @@
 #include "MainFrame.h"
 #include "ProfileDialog.h"
+#include "SshHostManagerDialog.h"
+#include "CredentialManagerDialog.h"
+#include "RemoteFileBrowserDialog.h"
 #include "core/TerminalLauncher.h"
 #include "ui/ProfileTreeBuilder.h"
 #include <wx/filedlg.h>
@@ -21,6 +24,8 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_BTN_IMPORT, MainFrame::OnImport)
     EVT_BUTTON(ID_BTN_EXPORT, MainFrame::OnExport)
     EVT_BUTTON(ID_BTN_OPEN_DIR, MainFrame::OnOpenWorkDir)
+    EVT_BUTTON(ID_BTN_SSH_HOSTS, MainFrame::OnManageSshHosts)
+    EVT_BUTTON(ID_BTN_CREDENTIALS, MainFrame::OnManageCredentials)
     EVT_TEXT(ID_SEARCH_CTRL, MainFrame::OnSearchTextChanged)
     EVT_TEXT_ENTER(ID_SEARCH_CTRL, MainFrame::OnSearchEnter)
     EVT_BUTTON(ID_BTN_CLEAR_SEARCH, MainFrame::OnClearSearch)
@@ -92,6 +97,8 @@ void MainFrame::CreateControls() {
     m_btnImport = new wxButton(panel, ID_BTN_IMPORT, wxT("导入..."), wxDefaultPosition, btnSize);
     m_btnExport = new wxButton(panel, ID_BTN_EXPORT, wxT("导出..."), wxDefaultPosition, btnSize);
     m_btnOpenDir = new wxButton(panel, ID_BTN_OPEN_DIR, wxT("打开目录"), wxDefaultPosition, btnSize);
+    m_btnSshHosts = new wxButton(panel, ID_BTN_SSH_HOSTS, wxT("SSH 主机..."), wxDefaultPosition, btnSize);
+    m_btnCredentials = new wxButton(panel, ID_BTN_CREDENTIALS, wxT("凭据..."), wxDefaultPosition, btnSize);
 
     leftSizer->Add(m_btnNew, 0, wxEXPAND | wxBOTTOM, 8);
     leftSizer->Add(m_btnEdit, 0, wxEXPAND | wxBOTTOM, 8);
@@ -102,7 +109,9 @@ void MainFrame::CreateControls() {
     leftSizer->Add(m_btnImport, 0, wxEXPAND | wxBOTTOM, 8);
     leftSizer->Add(m_btnExport, 0, wxEXPAND | wxBOTTOM, 14);
     leftSizer->Add(new wxStaticLine(panel, wxID_ANY), 0, wxEXPAND | wxBOTTOM, 14);
-    leftSizer->Add(m_btnOpenDir, 0, wxEXPAND);
+    leftSizer->Add(m_btnOpenDir, 0, wxEXPAND | wxBOTTOM, 8);
+    leftSizer->Add(m_btnSshHosts, 0, wxEXPAND | wxBOTTOM, 8);
+    leftSizer->Add(m_btnCredentials, 0, wxEXPAND);
     leftSizer->AddStretchSpacer();
 
     mainSizer->Add(leftSizer, 0, wxEXPAND | wxALL, 15);
@@ -410,6 +419,24 @@ void MainFrame::OnOpenWorkDir(wxCommandEvent& event) {
         return;
     }
 
+    // 远程配置：打开 SFTP 文件浏览器
+    if (profile->IsRemote()) {
+        const SshHost* host = ConfigManager::GetInstance().GetSshHost(profile->sshHostId);
+        if (!host) {
+            wxMessageBox(wxT("找不到 SSH 主机配置（可能已被删除）"), wxT("错误"),
+                         wxOK | wxICON_WARNING, this);
+            return;
+        }
+        const Credential* cred = profile->credentialId.empty()
+            ? nullptr
+            : ConfigManager::GetInstance().GetCredential(profile->credentialId);
+        RemoteFileBrowserDialog dlg(this, *host, cred,
+                                    profile->remoteWorkingDirectory,
+                                    RemoteBrowserMode::Browse);
+        dlg.ShowModal();
+        return;
+    }
+
     std::string dir = profile->GetWorkingDirectory();
     if (dir.empty()) {
         wxMessageBox(wxT("该配置未设置当前平台的工作目录"), wxT("提示"), wxOK | wxICON_INFORMATION, this);
@@ -429,6 +456,16 @@ void MainFrame::OnOpenWorkDir(wxCommandEvent& event) {
 #elif defined(__linux__)
     system(("xdg-open \"" + dir + "\"").c_str());
 #endif
+}
+
+void MainFrame::OnManageSshHosts(wxCommandEvent& event) {
+    SshHostManagerDialog dlg(this);
+    dlg.ShowModal();
+}
+
+void MainFrame::OnManageCredentials(wxCommandEvent& event) {
+    CredentialManagerDialog dlg(this);
+    dlg.ShowModal();
 }
 
 void MainFrame::OnListDoubleClick(wxListEvent& event) {

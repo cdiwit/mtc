@@ -1,5 +1,9 @@
 #include "TerminalLauncher.h"
+#include "ConfigManager.h"
 #include <cstdlib>
+#include <fstream>
+#include <string>
+#include <ctime>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -23,8 +27,13 @@ extern char** environ;
 #endif
 
 bool TerminalLauncher::Launch(const Profile& profile, std::string* errorMsg) {
+    // 远程配置：走 SSH 路径（在外部终端里跑 ssh）
+    if (profile.IsRemote()) {
+        return LaunchRemote(profile, errorMsg);
+    }
+
     auto env = BuildEnvironment(profile.environmentVariables);
-    
+
 #ifdef _WIN32
     return LaunchWindows(profile, env, errorMsg);
 #elif defined(__linux__)
@@ -35,6 +44,38 @@ bool TerminalLauncher::Launch(const Profile& profile, std::string* errorMsg) {
     if (errorMsg) *errorMsg = "Unsupported platform";
     return false;
 #endif
+}
+
+std::string TerminalLauncher::ShellSingleQuote(const std::string& s) {
+    std::string r = "'";
+    for (char c : s) {
+        if (c == '\'') r += "'\\''";
+        else r += c;
+    }
+    r += "'";
+    return r;
+}
+
+std::string TerminalLauncher::BuildRemoteInnerScript(const Profile& profile) {
+    // 这段脚本将通过 `ssh ... bash -s < script` 由 stdin 送到远程执行，
+    // 因此无需担心命令行的引号转义问题，脚本自身的单引号由远程 bash 正常解析。
+    std::string script = "#!/bin/bash\n";
+    if (!profile.remoteWorkingDirectory.empty()) {
+        script += "cd " + ShellSingleQuote(profile.remoteWorkingDirectory) + " 2>/dev/null\n";
+    }
+    for (const auto& var : profile.environmentVariables) {
+        if (!var.name.empty()) {
+            script += "export " + var.name + "=" + ShellSingleQuote(var.value) + "\n";
+        }
+    }
+    for (const auto& cmd : profile.startupCommands) {
+        if (!cmd.empty()) {
+            script += cmd + "\n";
+        }
+    }
+    // 落到交互式远程 shell
+    script += "exec \"$SHELL\" -l -i\n";
+    return script;
 }
 
 std::map<std::string, std::string> TerminalLauncher::BuildEnvironment(
@@ -760,3 +801,214 @@ bool TerminalLauncher::LaunchMacOS(
     return true;
 }
 #endif
+
+// ============================================================================
+// 远程 SSH 启动
+// ============================================================================
+bool TerminalLauncher::LaunchRemote(const Profile& profile, std::string* errorMsg) {
+    const SshHost* host = ConfigManager::GetInstance().GetSshHost(profile.sshHostId);
+    if (!host) {
+        if (errorMsg) *errorMsg = "找不到 SSH 主机配置（可能已被删除）";
+        return false;
+    }
+    const Credential* cred = profile.credentialId.empty()
+        ? nullptr
+        : ConfigManager::GetInstance().GetCredential(profile.credentialId);
+
+    // ssh 主干：-t 强制 TTY；非标准端口加 -p；私钥认证加 -i
+    std::string userAtHost = host->host;
+    if (!host->username.empty()) {
+        userAtHost = host->username + "@" + host->host;
+    }
+    std::string sshCore = "ssh -t";
+    if (host->port != 22) {
+        sshCore += " -p " + std::to_string(host->port);
+    }
+    if (cred && cred->type == CredentialType::PrivateKey && !cred->keyPath.empty()) {
+        sshCore += " -i " + ShellSingleQuote(cred->keyPath);
+    }
+    sshCore += " " + userAtHost;
+
+    // 远程执行的内层脚本（cd + export + 启动命令 + 交互 shell）
+    std::string innerScript = BuildRemoteInnerScript(profile);
+
+#if defined(__APPLE__) || defined(__linux__)
+    // 写入临时文件，通过 `bash -s < script` 由 stdin 送往远程，规避命令行转义
+    std::string innerPath = "/tmp/mtc_remote_inner_" +
+        std::to_string(std::time(nullptr)) + ".sh";
+    {
+        std::ofstream f(innerPath);
+        if (!f.is_open()) {
+            if (errorMsg) *errorMsg = "无法创建远程脚本临时文件";
+            return false;
+        }
+        f << innerScript;
+    }
+    chmod(innerPath.c_str(), 0600);
+
+    std::string sshCmd = sshCore + " bash -s < " + ShellSingleQuote(innerPath) +
+                         "; rm -f " + ShellSingleQuote(innerPath);
+#endif
+
+#ifdef __APPLE__
+    // AppleScript 字符串里转义反斜杠和双引号
+    std::string asCmd;
+    for (char c : sshCmd) {
+        if (c == '\\' || c == '"') asCmd += '\\';
+        asCmd += c;
+    }
+    std::string appleScript =
+        "tell application \"Terminal\"\n"
+        "  activate\n"
+        "  do script \"" + asCmd + "\"\n"
+        "end tell";
+
+    // osascript 用单引号包裹，转义内部单引号
+    std::string escapedScript;
+    for (char c : appleScript) {
+        if (c == '\'') escapedScript += "'\"'\"'";
+        else escapedScript += c;
+    }
+    std::string cmd = "osascript -e '" + escapedScript + "' 2>&1";
+
+    FILE* fp = popen(cmd.c_str(), "r");
+    if (!fp) {
+        remove(innerPath.c_str());
+        if (errorMsg) *errorMsg = "无法运行 osascript: " + std::string(strerror(errno));
+        return false;
+    }
+    std::array<char, 128> buffer;
+    std::string result;
+    while (fgets(buffer.data(), buffer.size(), fp) != nullptr) {
+        result += buffer.data();
+    }
+    int status = pclose(fp);
+    if (status != 0) {
+        remove(innerPath.c_str());
+        if (errorMsg) {
+            if (!result.empty() && result.back() == '\n') result.pop_back();
+            *errorMsg = result;
+        }
+        return false;
+    }
+    return true;
+#endif
+
+#ifdef __linux__
+    // 包装脚本：跑 ssh，结束后清理临时文件
+    std::string wrapperPath = "/tmp/mtc_remote_launch_" +
+        std::to_string(std::time(nullptr)) + ".sh";
+    {
+        std::ofstream f(wrapperPath);
+        if (!f.is_open()) {
+            remove(innerPath.c_str());
+            if (errorMsg) *errorMsg = "无法创建启动脚本临时文件";
+            return false;
+        }
+        f << "#!/bin/bash\n" << sshCmd << "\n";
+    }
+    chmod(wrapperPath.c_str(), 0700);
+
+    TerminalType type = profile.terminalType;
+    if (type == TerminalType::Auto) type = AutoDetectTerminal();
+    if (type == TerminalType::Auto) {
+        remove(innerPath.c_str());
+        remove(wrapperPath.c_str());
+        if (errorMsg) *errorMsg = "未找到支持的终端模拟器";
+        return false;
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        remove(innerPath.c_str());
+        remove(wrapperPath.c_str());
+        if (errorMsg) *errorMsg = "fork 失败: " + std::string(strerror(errno));
+        return false;
+    }
+    if (pid == 0) {
+        // 子进程：让 PATH 覆盖常见目录后执行终端模拟器
+        const char* currentPath = getenv("PATH");
+        std::string safePath = currentPath ? currentPath : "";
+        safePath += ":/usr/bin:/usr/local/bin:/bin:/snap/bin";
+        setenv("PATH", safePath.c_str(), 1);
+
+        switch (type) {
+            case TerminalType::ExoOpen:
+                execlp("exo-open", "exo-open", "--launch", "TerminalEmulator",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::QTerminal:
+                execlp("qterminal", "qterminal", "-e",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::GnomeTerminal:
+                execlp("gnome-terminal", "gnome-terminal", "--",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::Konsole:
+                execlp("konsole", "konsole", "-e",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::Xfce4Terminal:
+                execlp("xfce4-terminal", "xfce4-terminal", "--",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::MateTerminal:
+                execlp("mate-terminal", "mate-terminal", "--",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::Alacritty:
+                execlp("alacritty", "alacritty", "-e",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+            case TerminalType::Xterm:
+            default:
+                execlp("xterm", "xterm", "-e",
+                       "/bin/bash", wrapperPath.c_str(), nullptr); break;
+        }
+        _exit(1);
+    }
+    return true;
+#endif
+
+#ifdef _WIN32
+    std::filesystem::path tempDir = std::filesystem::temp_directory_path();
+    std::string innerName = "mtc_remote_inner_" + std::to_string(std::time(nullptr)) + ".sh";
+    std::filesystem::path innerPath = tempDir / innerName;
+    {
+        std::ofstream f(innerPath);
+        if (!f.is_open()) {
+            if (errorMsg) *errorMsg = "无法创建远程脚本临时文件";
+            return false;
+        }
+        f << innerScript;
+    }
+
+    // cmd 支持 < 重定向，把内层脚本通过 stdin 送往远程 bash
+    std::wstring innerW = innerPath.wstring();
+    std::wstring sshCmdW = Utf8ToWide(sshCore) + L" bash -s < \"" + innerW + L"\"";
+
+    TerminalType type = profile.terminalType;
+    if (type == TerminalType::Auto) type = AutoDetectTerminal();
+
+    std::wstring command, args;
+    bool useWt = (type == TerminalType::WindowsTerminal) && IsTerminalAvailable(TerminalType::WindowsTerminal);
+    if (useWt) {
+        command = L"wt.exe";
+        args = L"new-tab cmd /k \"" + sshCmdW + L"\"";
+    } else {
+        command = L"cmd.exe";
+        args = L"/k \"" + sshCmdW + L"\"";
+    }
+
+    std::wstring cmdLine = command + L" " + args;
+    STARTUPINFOW si = { sizeof(si) };
+    PROCESS_INFORMATION pi = { 0 };
+    DWORD flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NEW_CONSOLE;
+
+    BOOL ok = CreateProcessW(nullptr, &cmdLine[0], nullptr, nullptr, FALSE,
+                             flags, nullptr, nullptr, &si, &pi);
+    DWORD lastError = ::GetLastError();
+    if (ok) {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        return true;
+    }
+    if (errorMsg) *errorMsg = GetLastErrorAsString(lastError);
+    return false;
+#endif
+}
+

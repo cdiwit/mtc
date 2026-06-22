@@ -1,5 +1,7 @@
 #include "ProfileDialog.h"
 #include "EnvVarPanel.h"
+#include "RemoteFileBrowserDialog.h"
+#include "core/ConfigManager.h"
 #include "core/TerminalLauncher.h"
 #include "utils/PathUtils.h"
 #include <wx/dirdlg.h>
@@ -20,6 +22,9 @@ wxBEGIN_EVENT_TABLE(ProfileDialog, wxDialog)
     EVT_BUTTON(ID_PROFILE_BROWSE_LINUX, ProfileDialog::OnBrowseLinux)
     EVT_BUTTON(ID_PROFILE_BROWSE_MAC, ProfileDialog::OnBrowseMac)
     EVT_BUTTON(ID_PROFILE_OPEN_WORKDIR, ProfileDialog::OnOpenWorkDir)
+    EVT_BUTTON(ID_PROFILE_REMOTE_BROWSE, ProfileDialog::OnRemoteBrowse)
+    EVT_CHOICE(ID_PROFILE_SSH_HOST, ProfileDialog::OnRemoteSshHostChanged)
+    EVT_CHOICE(ID_PROFILE_CREDENTIAL, ProfileDialog::OnRemoteCredentialChanged)
     EVT_BUTTON(wxID_OK, ProfileDialog::OnOK)
 wxEND_EVENT_TABLE()
 
@@ -137,9 +142,52 @@ void ProfileDialog::CreateControls() {
 
     envTab->SetSizer(envSizer);
 
+    // ===== 选项卡 3: 远程/SSH =====
+    wxPanel* remoteTab = new wxPanel(m_notebook);
+    wxBoxSizer* remoteSizer = new wxBoxSizer(wxVERTICAL);
+
+    wxFlexGridSizer* remoteForm = new wxFlexGridSizer(3, 2, 8, 12);
+    remoteForm->AddGrowableCol(1, 1);
+
+    remoteForm->Add(new wxStaticText(remoteTab, wxID_ANY, wxT("SSH 主机:")),
+                    0, wxALIGN_CENTER_VERTICAL);
+    m_choiceSshHost = new wxChoice(remoteTab, ID_PROFILE_SSH_HOST);
+    remoteForm->Add(m_choiceSshHost, 1, wxEXPAND);
+
+    remoteForm->Add(new wxStaticText(remoteTab, wxID_ANY, wxT("凭据:")),
+                    0, wxALIGN_CENTER_VERTICAL);
+    m_choiceCredential = new wxChoice(remoteTab, ID_PROFILE_CREDENTIAL);
+    remoteForm->Add(m_choiceCredential, 1, wxEXPAND);
+
+    remoteForm->Add(new wxStaticText(remoteTab, wxID_ANY, wxT("远程工作目录:")),
+                    0, wxALIGN_CENTER_VERTICAL);
+    wxBoxSizer* remoteDirSizer = new wxBoxSizer(wxHORIZONTAL);
+    m_txtRemoteDir = new wxTextCtrl(remoteTab, ID_PROFILE_REMOTE_DIR);
+    m_txtRemoteDir->SetHint(wxT("如 /home/user/project"));
+    m_btnRemoteBrowse = new wxButton(remoteTab, ID_PROFILE_REMOTE_BROWSE, wxT("远程选择..."));
+    remoteDirSizer->Add(m_txtRemoteDir, 1, wxEXPAND | wxRIGHT, 5);
+    remoteDirSizer->Add(m_btnRemoteBrowse, 0);
+    remoteForm->Add(remoteDirSizer, 1, wxEXPAND);
+
+    remoteSizer->Add(remoteForm, 0, wxEXPAND | wxALL, 10);
+
+    auto* remoteHint = new wxStaticText(remoteTab, wxID_ANY,
+        wxT("提示：SSH 主机与凭据均为空时，启动本地终端。\n")
+        wxT("选择 SSH 主机后，点击\"远程选择...\"可浏览远端目录并选定初始路径。\n")
+        wxT("密码认证的密码仅用于文件浏览；终端会话用私钥(-i)或交互式输入。"));
+    remoteHint->Wrap(460);
+    remoteSizer->Add(remoteHint, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+
+    remoteTab->SetSizer(remoteSizer);
+
     // 添加选项卡
     m_notebook->AddPage(basicTab, wxT("基本信息"));
     m_notebook->AddPage(envTab, wxT("环境变量"));
+    m_notebook->AddPage(remoteTab, wxT("远程/SSH"));
+
+    // 填充远程下拉（默认无选择）
+    PopulateRemoteChoices("", "");
+    UpdateRemoteBrowseState();
 
     mainSizer->Add(m_notebook, 1, wxEXPAND | wxALL, 10);
 
@@ -195,6 +243,98 @@ void ProfileDialog::InitializeFromProfile(const Profile& profile) {
         cmds << wxString::FromUTF8(profile.startupCommands[i]);
     }
     m_txtStartupCommands->SetValue(cmds);
+
+    // 远程/SSH
+    PopulateRemoteChoices(profile.sshHostId, profile.credentialId);
+    m_txtRemoteDir->SetValue(wxString::FromUTF8(profile.remoteWorkingDirectory));
+    UpdateRemoteBrowseState();
+}
+
+void ProfileDialog::PopulateRemoteChoices(const std::string& selectedHostId,
+                                          const std::string& selectedCredId) {
+    // SSH 主机下拉
+    m_choiceSshHost->Clear();
+    m_choiceSshHost->Append(wxT("无（本地终端）"), new wxStringClientData(wxEmptyString));
+    int hostSel = 0;
+    int hostIdx = 1;
+    for (const auto& h : ConfigManager::GetInstance().GetSshHosts()) {
+        wxString label = wxString::FromUTF8(h.name);
+        if (!h.username.empty() || !h.host.empty()) {
+            label += wxT("  (");
+            label += wxString::FromUTF8(h.username.empty() ? h.host : (h.username + "@" + h.host));
+            label += wxT(")");
+        }
+        m_choiceSshHost->Append(label, new wxStringClientData(wxString::FromUTF8(h.id)));
+        if (h.id == selectedHostId) hostSel = hostIdx;
+        ++hostIdx;
+    }
+    m_choiceSshHost->SetSelection(hostSel);
+
+    // 凭据下拉
+    m_choiceCredential->Clear();
+    m_choiceCredential->Append(wxT("无"), new wxStringClientData(wxEmptyString));
+    int credSel = 0;
+    int credIdx = 1;
+    for (const auto& c : ConfigManager::GetInstance().GetCredentials()) {
+        wxString label = wxString::FromUTF8(c.name);
+        label += wxT("  [") + wxString::FromUTF8(CredentialTypeDisplayName(c.type)) + wxT("]");
+        m_choiceCredential->Append(label, new wxStringClientData(wxString::FromUTF8(c.id)));
+        if (c.id == selectedCredId) credSel = credIdx;
+        ++credIdx;
+    }
+    m_choiceCredential->SetSelection(credSel);
+}
+
+std::string ProfileDialog::GetSelectedSshHostId() const {
+    int sel = m_choiceSshHost->GetSelection();
+    if (sel <= 0) return "";
+    auto* data = static_cast<wxStringClientData*>(m_choiceSshHost->GetClientObject(sel));
+    return data ? data->GetData().ToStdString() : "";
+}
+
+std::string ProfileDialog::GetSelectedCredentialId() const {
+    int sel = m_choiceCredential->GetSelection();
+    if (sel <= 0) return "";
+    auto* data = static_cast<wxStringClientData*>(m_choiceCredential->GetClientObject(sel));
+    return data ? data->GetData().ToStdString() : "";
+}
+
+void ProfileDialog::UpdateRemoteBrowseState() {
+    // 远程浏览需要能连上：需要同时选定主机与凭据
+    bool canBrowse = !GetSelectedSshHostId().empty() && !GetSelectedCredentialId().empty();
+    m_btnRemoteBrowse->Enable(canBrowse);
+}
+
+void ProfileDialog::OnRemoteSshHostChanged(wxCommandEvent& event) {
+    UpdateRemoteBrowseState();
+}
+
+void ProfileDialog::OnRemoteCredentialChanged(wxCommandEvent& event) {
+    UpdateRemoteBrowseState();
+}
+
+void ProfileDialog::OnRemoteBrowse(wxCommandEvent& event) {
+    std::string hostId = GetSelectedSshHostId();
+    std::string credId = GetSelectedCredentialId();
+    if (hostId.empty() || credId.empty()) {
+        wxMessageBox(wxT("请先选择 SSH 主机与凭据"), wxT("提示"),
+                     wxOK | wxICON_INFORMATION, this);
+        return;
+    }
+
+    const SshHost* host = ConfigManager::GetInstance().GetSshHost(hostId);
+    const Credential* cred = ConfigManager::GetInstance().GetCredential(credId);
+    if (!host || !cred) return;
+
+    std::string startPath = m_txtRemoteDir->GetValue().ToStdString();
+    RemoteFileBrowserDialog dlg(this, *host, cred, startPath,
+                                RemoteBrowserMode::PickDir);
+    if (dlg.ShowModal() == wxID_OK) {
+        std::string dir = dlg.GetSelectedDir();
+        if (!dir.empty()) {
+            m_txtRemoteDir->SetValue(wxString::FromUTF8(dir));
+        }
+    }
 }
 
 void ProfileDialog::OnBrowse(wxCommandEvent& event) {
@@ -238,6 +378,11 @@ Profile ProfileDialog::GetProfile() const {
     }
 
     profile.environmentVariables = m_envVarPanel->GetEnvVariables();
+
+    // 远程/SSH
+    profile.sshHostId = GetSelectedSshHostId();
+    profile.credentialId = GetSelectedCredentialId();
+    profile.remoteWorkingDirectory = m_txtRemoteDir->GetValue().ToStdString();
 
     // 解析启动命令（每行一条）
     profile.startupCommands.clear();

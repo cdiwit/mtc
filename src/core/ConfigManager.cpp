@@ -110,11 +110,51 @@ bool ConfigManager::LoadConfig() {
 
                 profile.createdAt = jp.value("createdAt", "");
                 profile.updatedAt = jp.value("updatedAt", "");
-                
+
+                // 解析远程 SSH 配置（向后兼容：旧配置无这些字段时读空）
+                profile.sshHostId = jp.value("sshHostId", "");
+                profile.credentialId = jp.value("credentialId", "");
+                profile.remoteWorkingDirectory = jp.value("remoteWorkingDirectory", "");
+
                 m_config.profiles.push_back(profile);
             }
         }
-        
+
+        // 解析 SSH 主机
+        m_config.sshHosts.clear();
+        if (j.contains("sshHosts")) {
+            for (const auto& jh : j["sshHosts"]) {
+                SshHost host;
+                host.id = jh.value("id", "");
+                host.name = jh.value("name", "");
+                host.host = jh.value("host", "");
+                host.port = jh.value("port", 22);
+                host.username = jh.value("username", "");
+                host.createdAt = jh.value("createdAt", "");
+                host.updatedAt = jh.value("updatedAt", "");
+                if (!host.id.empty()) {
+                    m_config.sshHosts.push_back(host);
+                }
+            }
+        }
+
+        // 解析凭据（仅元数据，秘密在系统钥匙串）
+        m_config.credentials.clear();
+        if (j.contains("credentials")) {
+            for (const auto& jc : j["credentials"]) {
+                Credential cred;
+                cred.id = jc.value("id", "");
+                cred.name = jc.value("name", "");
+                cred.type = StringToCredentialType(jc.value("type", "password"));
+                cred.keyPath = jc.value("keyPath", "");
+                cred.createdAt = jc.value("createdAt", "");
+                cred.updatedAt = jc.value("updatedAt", "");
+                if (!cred.id.empty()) {
+                    m_config.credentials.push_back(cred);
+                }
+            }
+        }
+
         // 解析设置
         if (j.contains("settings")) {
             const auto& js = j["settings"];
@@ -182,10 +222,42 @@ bool ConfigManager::SaveConfig() {
 
             jp["createdAt"] = profile.createdAt;
             jp["updatedAt"] = profile.updatedAt;
-            
+
+            // 远程 SSH 配置
+            jp["sshHostId"] = profile.sshHostId;
+            jp["credentialId"] = profile.credentialId;
+            jp["remoteWorkingDirectory"] = profile.remoteWorkingDirectory;
+
             j["profiles"].push_back(jp);
         }
-        
+
+        // 序列化 SSH 主机
+        j["sshHosts"] = json::array();
+        for (const auto& host : m_config.sshHosts) {
+            j["sshHosts"].push_back({
+                {"id", host.id},
+                {"name", host.name},
+                {"host", host.host},
+                {"port", host.port},
+                {"username", host.username},
+                {"createdAt", host.createdAt},
+                {"updatedAt", host.updatedAt}
+            });
+        }
+
+        // 序列化凭据（仅元数据，不含密码/口令）
+        j["credentials"] = json::array();
+        for (const auto& cred : m_config.credentials) {
+            j["credentials"].push_back({
+                {"id", cred.id},
+                {"name", cred.name},
+                {"type", CredentialTypeToString(cred.type)},
+                {"keyPath", cred.keyPath},
+                {"createdAt", cred.createdAt},
+                {"updatedAt", cred.updatedAt}
+            });
+        }
+
         // 序列化设置
         j["settings"] = {
             {"defaultTerminalType", TerminalTypeToString(m_config.settings.defaultTerminalType)},
@@ -316,17 +388,116 @@ Profile ConfigManager::DuplicateProfile(const std::string& id) {
     if (!original) {
         return Profile();
     }
-    
+
     Profile newProfile = *original;
     newProfile.name = original->name + " (副本)";
     newProfile.id = GenerateUuid();
     newProfile.createdAt = GetCurrentTimestamp();
     newProfile.updatedAt = newProfile.createdAt;
-    
+
     m_config.profiles.push_back(newProfile);
     SaveConfig();
-    
+
     return newProfile;
+}
+
+// ===== SSH 主机 =====
+const SshHost* ConfigManager::GetSshHost(const std::string& id) const {
+    for (const auto& h : m_config.sshHosts) {
+        if (h.id == id) {
+            return &h;
+        }
+    }
+    return nullptr;
+}
+
+void ConfigManager::AddSshHost(const SshHost& host) {
+    SshHost newHost = host;
+    newHost.id = GenerateUuid();
+    newHost.createdAt = GetCurrentTimestamp();
+    newHost.updatedAt = newHost.createdAt;
+    m_config.sshHosts.push_back(newHost);
+    SaveConfig();
+}
+
+void ConfigManager::UpdateSshHost(const std::string& id, const SshHost& host) {
+    for (auto& h : m_config.sshHosts) {
+        if (h.id == id) {
+            std::string oldId = h.id;
+            std::string oldCreatedAt = h.createdAt;
+            h = host;
+            h.id = oldId;
+            h.createdAt = oldCreatedAt;
+            h.updatedAt = GetCurrentTimestamp();
+            break;
+        }
+    }
+    SaveConfig();
+}
+
+void ConfigManager::DeleteSshHost(const std::string& id) {
+    m_config.sshHosts.erase(
+        std::remove_if(m_config.sshHosts.begin(), m_config.sshHosts.end(),
+            [&id](const SshHost& h) { return h.id == id; }),
+        m_config.sshHosts.end()
+    );
+    // 清理引用了该主机的 Profile（置空，退化为本地终端）
+    for (auto& p : m_config.profiles) {
+        if (p.sshHostId == id) {
+            p.sshHostId.clear();
+        }
+    }
+    SaveConfig();
+}
+
+// ===== 凭据 =====
+const Credential* ConfigManager::GetCredential(const std::string& id) const {
+    for (const auto& c : m_config.credentials) {
+        if (c.id == id) {
+            return &c;
+        }
+    }
+    return nullptr;
+}
+
+Credential ConfigManager::AddCredential(const Credential& cred) {
+    Credential newCred = cred;
+    newCred.id = GenerateUuid();
+    newCred.createdAt = GetCurrentTimestamp();
+    newCred.updatedAt = newCred.createdAt;
+    m_config.credentials.push_back(newCred);
+    SaveConfig();
+    return newCred;
+}
+
+void ConfigManager::UpdateCredential(const std::string& id, const Credential& cred) {
+    for (auto& c : m_config.credentials) {
+        if (c.id == id) {
+            std::string oldId = c.id;
+            std::string oldCreatedAt = c.createdAt;
+            c = cred;
+            c.id = oldId;
+            c.createdAt = oldCreatedAt;
+            c.updatedAt = GetCurrentTimestamp();
+            break;
+        }
+    }
+    SaveConfig();
+}
+
+void ConfigManager::DeleteCredential(const std::string& id) {
+    m_config.credentials.erase(
+        std::remove_if(m_config.credentials.begin(), m_config.credentials.end(),
+            [&id](const Credential& c) { return c.id == id; }),
+        m_config.credentials.end()
+    );
+    // 清理引用了该凭据的 Profile
+    for (auto& p : m_config.profiles) {
+        if (p.credentialId == id) {
+            p.credentialId.clear();
+        }
+    }
+    SaveConfig();
 }
 
 bool ConfigManager::ExportConfig(const fs::path& filePath) {
